@@ -1,19 +1,20 @@
 package com.la2soft.roommap.backend
 
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import pro.wsmi.kwsmilib.jvm.serialization.URLSerializer
-import java.net.URL
+import org.litote.kmongo.Id
+import org.litote.kmongo.newId
+import pro.wsmi.kwsmilib.net.URL
 
 @ExperimentalSerializationApi
 @Serializable
 data class Server (
-        val id: Long,
+        @Contextual
+        @SerialName("_id")
+        val id: Id<Server> = newId(),
         val name: String,
-        @Serializable(with = URLSerializer::class)
         @SerialName("api_url")
-        val apiURL: URL,
-        @SerialName("supported_specification_versions")
-        val supportedSpecVersions: List<String>
+        val apiURL: URL
 )

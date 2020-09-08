@@ -3,8 +3,7 @@ package com.la2soft.roommap.backend.matrix.api
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import pro.wsmi.kwsmilib.jvm.serialization.URLSerializer
-import java.net.URL
+import pro.wsmi.kwsmilib.net.URL
 
 @ExperimentalSerializationApi
 @Serializable
@@ -22,7 +21,6 @@ data class PublicRoomsChunk (
         val worldReadable: Boolean,
         @SerialName("guest_can_join")
         val guestCanJoin: Boolean,
-        @Serializable(with = URLSerializer::class)
         @SerialName("avatar_url")
-        val avatarUrl: URL? = null
+        val avatarUrl: String? = null
 )

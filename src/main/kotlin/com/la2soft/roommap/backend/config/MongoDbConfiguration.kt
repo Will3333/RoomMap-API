@@ -8,11 +8,10 @@ import java.net.InetSocketAddress
 
 @ExperimentalSerializationApi
 @Serializable
-data class BackendConfiguration (
-        @SerialName("instance_name")
-        val instanceName: String,
-        @Serializable(with = InetSocketAddressSerializer::class)
-        val proxy: InetSocketAddress? = null,
-        @SerialName("mongodb_configuration")
-        val mongoCfg: MongoDbConfiguration
+data class MongoDbConfiguration (
+    @Serializable(with = InetSocketAddressSerializer::class)
+    val server: InetSocketAddress,
+    @SerialName("database_name")
+    val dbName: String,
+    val credentials: MongoDbCredentials? = null
 )
