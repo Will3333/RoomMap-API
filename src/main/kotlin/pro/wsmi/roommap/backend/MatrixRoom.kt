@@ -1,6 +1,6 @@
-package com.la2soft.roommap.backend
+package pro.wsmi.roommap.backend
 
-data class Room (
+data class MatrixRoom (
     val roomId: String,
     val aliases: List<String>? = null,
     val canonicalAlias: String? = null,

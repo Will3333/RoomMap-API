@@ -5,7 +5,7 @@ plugins {
     kotlin("plugin.serialization") version "1.4.10"
 }
 
-group = "com.la2soft"
+group = "pro.wsmi"
 version = "0.1"
 
 val COROUTINES_VERSION = "1.3.9"

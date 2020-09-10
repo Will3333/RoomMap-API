@@ -1,4 +1,4 @@
-package com.la2soft.roommap.backend
+package pro.wsmi.roommap.backend
 
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -11,15 +11,15 @@ import pro.wsmi.kwsmilib.net.URL
 
 @ExperimentalSerializationApi
 @Serializable
-data class Server (
+data class MatrixServer (
         @Contextual
         @SerialName("_id")
-        val id: Id<Server> = newId(),
+        val id: Id<MatrixServer> = newId(),
         val name: String,
         @SerialName("api_url")
         val apiURL: URL,
         @SerialName("update_frequency")
         val updateFreq: Long = 3600000L,
         @Transient
-        var rooms: List<Room> = listOf()
+        var matrixRooms: List<MatrixRoom> = listOf()
 )

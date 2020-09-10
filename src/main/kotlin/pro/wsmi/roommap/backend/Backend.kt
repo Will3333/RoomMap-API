@@ -1,12 +1,12 @@
-package com.la2soft.roommap.backend
+package pro.wsmi.roommap.backend
 
 import com.charleskorn.kaml.Yaml
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
-import com.la2soft.roommap.backend.config.BackendConfiguration
-import com.la2soft.roommap.backend.matrix.api.PublicRoomsListReq200Response
+import pro.wsmi.roommap.backend.config.BackendConfiguration
+import pro.wsmi.roommap.backend.matrix.api.PublicRoomsListReq200Response
 import io.ktor.client.*
 import io.ktor.client.engine.apache.*
 import io.ktor.client.features.*
@@ -31,12 +31,12 @@ const val APP_NAME = "RoomMap"
 const val APP_VERSION = "0.1"
 val DEFAULT_CFG_FILE_DIR = File(System.getProperty("user.home"))
 const val DEFAULT_CFG_FILE_NAME = ".roommap-backend.yml"
-const val MONGODB_SERVERS_COL_NAME = "servers"
+const val MONGODB_MATRIX_SERVERS_COL_NAME = "matrix_servers"
 const val MATRIX_API_PUBLIC_ROOMS_PATH = "/_matrix/client/r0/publicRooms"
 
 @KtorExperimentalAPI
 @ExperimentalSerializationApi
-fun getHttpClients(servers: List<Server>, backendCfg: BackendConfiguration) : Map<Server, HttpClient> = servers.associateWith { server: Server ->
+fun getHttpClients(matrixServers: List<MatrixServer>, backendCfg: BackendConfiguration) : Map<MatrixServer, HttpClient> = matrixServers.associateWith { matrixServer: MatrixServer ->
     HttpClient(Apache) {
 
         engine {
@@ -47,17 +47,17 @@ fun getHttpClients(servers: List<Server>, backendCfg: BackendConfiguration) : Ma
         }
         defaultRequest {
             url {
-                host = server.apiURL.host
-                if (server.apiURL.port != null)
-                    port = server.apiURL.port!!
-                protocol = URLProtocol(server.apiURL.protocol, -1)
+                host = matrixServer.apiURL.host
+                if (matrixServer.apiURL.port != null)
+                    port = matrixServer.apiURL.port!!
+                protocol = URLProtocol(matrixServer.apiURL.protocol, -1)
             }
         }
     }
 }
 
 @ExperimentalSerializationApi
-suspend fun getRoomListOfServer (httpClient: HttpClient) : List<Room>?
+suspend fun getRoomListOfServer (httpClient: HttpClient) : List<MatrixRoom>?
 {
     val httpResponse = httpClient.get<HttpResponse>() {
 
@@ -72,7 +72,7 @@ suspend fun getRoomListOfServer (httpClient: HttpClient) : List<Room>?
     else null
 
     return publicRoomsListReq200Response?.chunk?.map {
-        Room(it.roomId, it.aliases, it.canonicalAlias, it.name, it.numJoinedMembers, it.topic, it.worldReadable, it.guestCanJoin, it.avatarUrl)
+        MatrixRoom(it.roomId, it.aliases, it.canonicalAlias, it.name, it.numJoinedMembers, it.topic, it.worldReadable, it.guestCanJoin, it.avatarUrl)
     }
 }
 
@@ -132,37 +132,34 @@ class BasicLineCmd : CliktCommand(name = "Backend")
 
         print("Loading of matrix servers list ... ")
 
-        val serversCol = mongoDB.getCollection<Server>(MONGODB_SERVERS_COL_NAME)
+        val matrixServersCol = mongoDB.getCollection<MatrixServer>(MONGODB_MATRIX_SERVERS_COL_NAME)
 
-        val servers = serversCol.find().toList()
+        val matrixServers = matrixServersCol.find().toList()
 
         println("OK")
 
         print("First querying to Matrix servers to initialize the room list ... ")
 
-        val httpClients = getHttpClients(servers, backendCfg)
+        val httpClients = getHttpClients(matrixServers, backendCfg)
 
         for ((server, httpClient) in httpClients)
         {
             val roomList = getRoomListOfServer(httpClient)
-            if (roomList != null) server.rooms = roomList
+            if (roomList != null) server.matrixRooms = roomList
         }
 
         println("OK")
 
         println("Backend started")
 
-        for ((server, httpClient) in httpClients)
-        {
+        val updateRoomJobs = httpClients.mapValues {
             launch {
                 while (true)
                 {
-                    delay(server.updateFreq)
+                    delay(it.key.updateFreq)
 
-                    val roomList = getRoomListOfServer(httpClient)
-                    if (roomList != null) server.rooms = roomList
-
-                    println(roomList)
+                    val roomList = getRoomListOfServer(it.value)
+                    if (roomList != null) it.key.matrixRooms = roomList
                 }
             }
         }

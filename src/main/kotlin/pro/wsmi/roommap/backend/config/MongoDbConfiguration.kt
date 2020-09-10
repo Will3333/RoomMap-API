@@ -1,4 +1,4 @@
-package com.la2soft.roommap.backend.config
+package pro.wsmi.roommap.backend.config
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName

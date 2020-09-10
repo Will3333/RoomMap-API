@@ -1,4 +1,4 @@
-package com.la2soft.roommap.backend.matrix.api
+package pro.wsmi.roommap.backend.matrix.api
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
