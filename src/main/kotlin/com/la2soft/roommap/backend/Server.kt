@@ -18,6 +18,8 @@ data class Server (
         val name: String,
         @SerialName("api_url")
         val apiURL: URL,
+        @SerialName("update_frequency")
+        val updateFreq: Long = 3600000L,
         @Transient
-        val rooms: MutableList<Room> = mutableListOf()
+        var rooms: List<Room> = listOf()
 )

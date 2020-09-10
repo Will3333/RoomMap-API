@@ -13,6 +13,7 @@ import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.util.KtorExperimentalAPI
 import io.ktor.utils.io.charsets.Charsets
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -31,6 +32,49 @@ const val APP_VERSION = "0.1"
 val DEFAULT_CFG_FILE_DIR = File(System.getProperty("user.home"))
 const val DEFAULT_CFG_FILE_NAME = ".roommap-backend.yml"
 const val MONGODB_SERVERS_COL_NAME = "servers"
+const val MATRIX_API_PUBLIC_ROOMS_PATH = "/_matrix/client/r0/publicRooms"
+
+@KtorExperimentalAPI
+@ExperimentalSerializationApi
+fun getHttpClients(servers: List<Server>, backendCfg: BackendConfiguration) : Map<Server, HttpClient> = servers.associateWith { server: Server ->
+    HttpClient(Apache) {
+
+        engine {
+            proxy = if (backendCfg.proxy != null ) Proxy(Proxy.Type.HTTP, backendCfg.proxy) else null
+        }
+        install(UserAgent) {
+            agent = "$APP_NAME/$APP_VERSION (${backendCfg.instanceName})"
+        }
+        defaultRequest {
+            url {
+                host = server.apiURL.host
+                if (server.apiURL.port != null)
+                    port = server.apiURL.port!!
+                protocol = URLProtocol(server.apiURL.protocol, -1)
+            }
+        }
+    }
+}
+
+@ExperimentalSerializationApi
+suspend fun getRoomListOfServer (httpClient: HttpClient) : List<Room>?
+{
+    val httpResponse = httpClient.get<HttpResponse>() {
+
+        method = HttpMethod.Get
+        url {
+            encodedPath = MATRIX_API_PUBLIC_ROOMS_PATH
+        }
+    }
+
+    val publicRoomsListReq200Response = if (httpResponse.status == HttpStatusCode.OK)
+        Json.decodeFromString(PublicRoomsListReq200Response.serializer(), httpResponse.readText(Charsets.UTF_8))
+    else null
+
+    return publicRoomsListReq200Response?.chunk?.map {
+        Room(it.roomId, it.aliases, it.canonicalAlias, it.name, it.numJoinedMembers, it.topic, it.worldReadable, it.guestCanJoin, it.avatarUrl)
+    }
+}
 
 class BasicLineCmd : CliktCommand(name = "Backend")
 {
@@ -45,6 +89,7 @@ class BasicLineCmd : CliktCommand(name = "Backend")
         )
     private val debugModeCLA by option("--debug", help = "Turn on the debug mode").flag()
 
+    @KtorExperimentalAPI
     @ExperimentalSerializationApi
     override fun run() = runBlocking {
         print("Loading of backend configuration ... ")
@@ -89,58 +134,35 @@ class BasicLineCmd : CliktCommand(name = "Backend")
 
         val serversCol = mongoDB.getCollection<Server>(MONGODB_SERVERS_COL_NAME)
 
-        val servers = serversCol.find()
+        val servers = serversCol.find().toList()
+
+        println("OK")
+
+        print("First querying to Matrix servers to initialize the room list ... ")
+
+        val httpClients = getHttpClients(servers, backendCfg)
+
+        for ((server, httpClient) in httpClients)
+        {
+            val roomList = getRoomListOfServer(httpClient)
+            if (roomList != null) server.rooms = roomList
+        }
 
         println("OK")
 
         println("Backend started")
-
-        val httpClients = mutableMapOf<Server, HttpClient>()
-        for (server in servers)
-        {
-            val httpClient = HttpClient(Apache) {
-
-                engine {
-                    proxy = if (backendCfg.proxy != null ) Proxy(Proxy.Type.HTTP, backendCfg.proxy) else null
-                }
-                install(UserAgent) {
-                    agent = "$APP_NAME/$APP_VERSION (${backendCfg.instanceName})"
-                }
-                defaultRequest {
-                    url {
-                        host = server.apiURL.host
-                        if (server.apiURL.port != null)
-                            port = server.apiURL.port!!
-                        protocol = URLProtocol(server.apiURL.protocol, -1)
-                    }
-                }
-            }
-
-            httpClients[server] = httpClient
-        }
 
         for ((server, httpClient) in httpClients)
         {
             launch {
                 while (true)
                 {
-                    val httpResponse = httpClient.get<HttpResponse>() {
+                    delay(server.updateFreq)
 
-                        method = HttpMethod.Get
-                        url {
-                            encodedPath = "/_matrix/client/r0/publicRooms"
-                        }
-                    }
+                    val roomList = getRoomListOfServer(httpClient)
+                    if (roomList != null) server.rooms = roomList
 
-                    val publicRoomsListReq200Response = if (httpResponse.status == HttpStatusCode.OK)
-                        Json.decodeFromString(PublicRoomsListReq200Response.serializer(), httpResponse.readText(Charsets.UTF_8))
-                    else
-                        null
-
-                    if (publicRoomsListReq200Response != null)
-                        println(publicRoomsListReq200Response)
-
-                    delay(60000L)
+                    println(roomList)
                 }
             }
         }
@@ -148,55 +170,3 @@ class BasicLineCmd : CliktCommand(name = "Backend")
 }
 
 fun main(args: Array<String>) = BasicLineCmd().main(args)
-
-
-
-    /*
-    val serverList = mutableMapOf<Server, HttpClient>()
-
-    val newServer = Server(1, "LA²Soft", URL("https", "matrix.la2soft.com", 8448, ""), listOf())
-    serverList[newServer] = HttpClient(Apache) {
-
-        engine {
-            proxy = httpProxy
-        }
-        install(UserAgent) {
-            agent = "$APP_NAME/$APP_VERSION ($APP_INSTANCE_NAME)"
-        }
-        Charsets {
-            register(Charsets.UTF_8)
-        }
-        defaultRequest {
-            url {
-                host = newServer.apiURL.host
-                port = newServer.apiURL.port
-                protocol = URLProtocol(newServer.apiURL.protocol, -1)
-            }
-        }
-    }
-
-    for ((server, httpClient) in serverList)
-    {
-        launch {
-            while (true)
-            {
-                val httpResponse = httpClient.get<HttpResponse>() {
-                    method = HttpMethod.Get
-                    url {
-                        encodedPath = "/_matrix/client/r0/publicRooms"
-                    }
-                }
-
-                val publicRoomsListReq200Response = if (httpResponse.status == HttpStatusCode.OK) {
-                    Json.decodeFromString(PublicRoomsListReq200Response.serializer(), httpResponse.readText())
-                } else
-                    null
-
-                if (publicRoomsListReq200Response != null)
-                    println(publicRoomsListReq200Response)
-
-                delay(60000L)
-            }
-        }
-    }
-    */

@@ -1,8 +1,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.4.0"
-    kotlin("plugin.serialization") version "1.4.0"
+    kotlin("jvm") version "1.4.10"
+    kotlin("plugin.serialization") version "1.4.10"
 }
 
 group = "com.la2soft"
@@ -11,7 +11,7 @@ version = "0.1"
 val COROUTINES_VERSION = "1.3.9"
 val SERIALIZATION_VERSION = "1.0.0-RC"
 val KAML_VERSION = "0.21.0"
-val KWSMILIB_VERSION = "0.5.0"
+val KWSMILIB_VERSION = "0.6.0"
 val CLIKT_VERSION = "3.0.0"
 val KMONGO_VERSION= "4.1.2"
 val LOGBACK_VERSION = "1.2.3"
