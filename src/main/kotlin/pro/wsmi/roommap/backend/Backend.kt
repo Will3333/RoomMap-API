@@ -212,11 +212,10 @@ class BasicLineCmd : CliktCommand(name = "Backend")
             }
         }
 
-        launch {
-            configureGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
-                "/api/rooms" bind Method.GET to matrixRoomsAPIReqHandler(debugModeCLA, backendCfg, matrixServers)
-            )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
-        }
+
+        configureGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
+            "/api/rooms" bind Method.GET to matrixRoomsAPIReqHandler(debugModeCLA, backendCfg, matrixServers)
+        )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }
 
