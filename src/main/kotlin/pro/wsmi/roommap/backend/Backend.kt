@@ -20,7 +20,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import org.http4k.core.*
+import org.http4k.core.ContentType
+import org.http4k.filter.DebuggingFilters
+import org.http4k.filter.ServerFilters
+import org.http4k.routing.bind
+import org.http4k.routing.routes
+import org.http4k.server.Jetty
+import org.http4k.server.asServer
 import org.litote.kmongo.*
+import pro.wsmi.roommap.lib.api.APIRoomListReqResponse
 import java.io.File
 import java.net.Proxy
 import java.util.logging.Level
@@ -76,6 +85,45 @@ suspend fun getRoomListOfServer (httpClient: HttpClient) : List<MatrixRoom>?
     }
 }
 
+@ExperimentalSerializationApi
+fun configureGlobalHttpFilter(debugMode: Boolean, backendCfg: BackendConfiguration) : Filter
+{
+    val serverHeaderFilter : Filter = Filter {next: HttpHandler ->
+        { req: Request ->
+            val originalResponse = next(req)
+            originalResponse.header("Server", "$APP_NAME/$APP_VERSION")
+        }
+    }
+    val contentTypeFilter = serverHeaderFilter.then(ServerFilters.SetContentType(ContentType.APPLICATION_JSON))
+    val compressionFilter = if (backendCfg.apiHttpServer.compression) contentTypeFilter.then(ServerFilters.GZip()) else contentTypeFilter
+    return if (debugMode) compressionFilter.then(DebuggingFilters.PrintRequestAndResponse()) else compressionFilter
+}
+
+@ExperimentalSerializationApi
+fun matrixRoomsAPIReqHandler(debugMode: Boolean, backendCfg: BackendConfiguration, matrixServers: List<MatrixServer>) : HttpHandler = { req: Request ->
+    val jsonEncoder = Json {
+        prettyPrint = debugMode
+    }
+
+    val apiRoomListReqResponse = APIRoomListReqResponse(
+        matrixServers.map {
+            pro.wsmi.roommap.lib.api.MatrixServer(it.id.toString(), it.name, it.apiURL, it.updateFreq)
+        },
+        matrixServers.associateBy(
+            { server ->
+                server.id.toString()
+            },
+            { server ->
+                server.matrixRooms.map {
+                    pro.wsmi.roommap.lib.api.MatrixRoom(it.roomId, it.aliases, it.canonicalAlias, it.name, it.numJoinedMembers, it.topic, it.worldReadable, it.guestCanJoin, it.avatarUrl)
+                }
+            }
+        )
+    )
+
+    Response(Status.OK).body(jsonEncoder.encodeToString(APIRoomListReqResponse.serializer(), apiRoomListReqResponse))
+}
+
 class BasicLineCmd : CliktCommand(name = "Backend")
 {
     private val cfgFilePathCLA: File? by option("-f", "--config-file", help = "Path of the backend configuration file")
@@ -91,7 +139,7 @@ class BasicLineCmd : CliktCommand(name = "Backend")
 
     @KtorExperimentalAPI
     @ExperimentalSerializationApi
-    override fun run() = runBlocking {
+    override fun run(): Unit = runBlocking {
         print("Loading of backend configuration ... ")
 
         val configFile = this@BasicLineCmd.cfgFilePathCLA ?: File(DEFAULT_CFG_FILE_DIR, DEFAULT_CFG_FILE_NAME)
@@ -162,6 +210,12 @@ class BasicLineCmd : CliktCommand(name = "Backend")
                     if (roomList != null) it.key.matrixRooms = roomList
                 }
             }
+        }
+
+        launch {
+            configureGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
+                "/api/rooms" bind Method.GET to matrixRoomsAPIReqHandler(debugModeCLA, backendCfg, matrixServers)
+            )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
         }
     }
 }

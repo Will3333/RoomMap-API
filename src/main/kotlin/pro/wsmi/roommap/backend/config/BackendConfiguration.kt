@@ -14,5 +14,7 @@ data class BackendConfiguration (
         @Serializable(with = InetSocketAddressSerializer::class)
         val proxy: InetSocketAddress? = null,
         @SerialName("mongodb_configuration")
-        val mongoCfg: MongoDbConfiguration
+        val mongoCfg: MongoDbConfiguration,
+        @SerialName("api_http_server")
+        val apiHttpServer: APIHttpServer
 )
