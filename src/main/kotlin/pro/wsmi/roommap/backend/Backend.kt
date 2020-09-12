@@ -36,8 +36,8 @@ import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.system.exitProcess
 
-const val APP_NAME = "RoomMap"
-const val APP_VERSION = "0.1"
+const val APP_NAME = "RoomMap-Backend"
+const val APP_VERSION = "0.1.0"
 val DEFAULT_CFG_FILE_DIR = File(System.getProperty("user.home"))
 const val DEFAULT_CFG_FILE_NAME = ".roommap-backend.yml"
 const val MONGODB_MATRIX_SERVERS_COL_NAME = "matrix_servers"
@@ -86,7 +86,7 @@ suspend fun getRoomListOfServer (httpClient: HttpClient) : List<MatrixRoom>?
 }
 
 @ExperimentalSerializationApi
-fun configureGlobalHttpFilter(debugMode: Boolean, backendCfg: BackendConfiguration) : Filter
+fun configureAPIGlobalHttpFilter(debugMode: Boolean, backendCfg: BackendConfiguration) : Filter
 {
     val serverHeaderFilter : Filter = Filter {next: HttpHandler ->
         { req: Request ->
@@ -106,25 +106,30 @@ fun matrixRoomsAPIReqHandler(debugMode: Boolean, backendCfg: BackendConfiguratio
     }
 
     val apiRoomListReqResponse = APIRoomListReqResponse(
-        matrixServers.map {
-            pro.wsmi.roommap.lib.api.MatrixServer(it.id.toString(), it.name, it.apiURL, it.updateFreq)
-        },
-        matrixServers.associateBy(
-            { server ->
-                server.id.toString()
-            },
-            { server ->
-                server.matrixRooms.map {
-                    pro.wsmi.roommap.lib.api.MatrixRoom(it.roomId, it.aliases, it.canonicalAlias, it.name, it.numJoinedMembers, it.topic, it.worldReadable, it.guestCanJoin, it.avatarUrl)
+        matrixServers.associateBy (
+                {
+                    it.id.toString()
+                },
+                {
+                    pro.wsmi.roommap.lib.api.MatrixServer(it.name, it.apiURL, it.updateFreq)
                 }
-            }
+        ),
+        matrixServers.associateBy(
+                { server ->
+                    server.id.toString()
+                },
+                { server ->
+                    server.matrixRooms.map {
+                        pro.wsmi.roommap.lib.api.MatrixRoom(it.roomId, it.aliases, it.canonicalAlias, it.name, it.numJoinedMembers, it.topic, it.worldReadable, it.guestCanJoin, it.avatarUrl)
+                    }
+                }
         )
     )
 
     Response(Status.OK).body(jsonEncoder.encodeToString(APIRoomListReqResponse.serializer(), apiRoomListReqResponse))
 }
 
-class BasicLineCmd : CliktCommand(name = "Backend")
+class BaseLineCmd : CliktCommand(name = "RoomMapBackend")
 {
     private val cfgFilePathCLA: File? by option("-f", "--config-file", help = "Path of the backend configuration file")
         .file (
@@ -142,7 +147,7 @@ class BasicLineCmd : CliktCommand(name = "Backend")
     override fun run(): Unit = runBlocking {
         print("Loading of backend configuration ... ")
 
-        val configFile = this@BasicLineCmd.cfgFilePathCLA ?: File(DEFAULT_CFG_FILE_DIR, DEFAULT_CFG_FILE_NAME)
+        val configFile = this@BaseLineCmd.cfgFilePathCLA ?: File(DEFAULT_CFG_FILE_DIR, DEFAULT_CFG_FILE_NAME)
         if (!configFile.exists() || !configFile.isFile) {
             println("FAILED")
             println("The configuration file ${configFile.canonicalFile} does not exist.")
@@ -154,13 +159,12 @@ class BasicLineCmd : CliktCommand(name = "Backend")
             exitProcess(2)
         }
 
-
         val backendCfg = try {
             Yaml.default.decodeFromString(BackendConfiguration.serializer(), configFile.readText(Charsets.UTF_8))
         } catch (e: Exception) {
             println("FAILED")
             println("There is an error in the configuration file ${configFile.canonicalFile}.")
-            if (this@BasicLineCmd.debugModeCLA) e.printStackTrace()
+            if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
             else println(e.localizedMessage)
             exitProcess(3)
         }
@@ -213,10 +217,10 @@ class BasicLineCmd : CliktCommand(name = "Backend")
         }
 
 
-        configureGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
+        configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
             "/api/rooms" bind Method.GET to matrixRoomsAPIReqHandler(debugModeCLA, backendCfg, matrixServers)
         )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }
 
-fun main(args: Array<String>) = BasicLineCmd().main(args)
+fun main(args: Array<String>) = BaseLineCmd().main(args)

@@ -6,14 +6,14 @@ plugins {
 }
 
 group = "pro.wsmi"
-version = "0.1"
+version = "0.1.0"
 
 val ROOMMAP_LIB_VERSION = "0.1.0"
 val COROUTINES_VERSION = "1.3.9"
 val SERIALIZATION_VERSION = "1.0.0-RC"
 val KAML_VERSION = "0.21.0"
-val KWSMILIB_VERSION = "0.6.0"
 val CLIKT_VERSION = "3.0.0"
+val KWSMILIB_VERSION = "0.6.0"
 val KMONGO_VERSION= "4.1.2"
 val LOGBACK_VERSION = "1.2.3"
 val HTTP4K_VERSION = "3.260.0"
@@ -32,8 +32,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$COROUTINES_VERSION")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:$SERIALIZATION_VERSION")
     implementation("com.charleskorn.kaml:kaml:$KAML_VERSION")
-    implementation("pro.wsmi:kwsmilib-jvm:$KWSMILIB_VERSION")
     implementation("com.github.ajalt.clikt:clikt:$CLIKT_VERSION")
+    implementation("pro.wsmi:kwsmilib-jvm:$KWSMILIB_VERSION")
     implementation("org.litote.kmongo:kmongo:$KMONGO_VERSION")
     implementation("org.litote.kmongo:kmongo-coroutine-serialization:$KMONGO_VERSION")
     implementation("org.litote.kmongo:kmongo-id-serialization:$KMONGO_VERSION")
