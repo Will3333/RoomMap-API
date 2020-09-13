@@ -22,7 +22,9 @@ import org.http4k.routing.routes
 import org.http4k.server.Jetty
 import org.http4k.server.asServer
 import org.litote.kmongo.*
-import pro.wsmi.roommap.lib.api.APIRoomListReqResponse
+import pro.wsmi.roommap.lib.api.APIRoomListReq
+import pro.wsmi.roommap.lib.api.APIServerListReq
+import pro.wsmi.roommap.lib.api.APIServerReq
 import java.io.File
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -85,35 +87,6 @@ fun configureAPIGlobalHttpFilter(debugMode: Boolean, backendCfg: BackendConfigur
     return if (debugMode) compressionFilter.then(DebuggingFilters.PrintRequestAndResponse()) else compressionFilter
 }
 
-@ExperimentalSerializationApi
-fun matrixRoomsAPIReqHandler(debugMode: Boolean, backendCfg: BackendConfiguration, matrixServers: List<MatrixServer>) : HttpHandler = { req: Request ->
-    val jsonEncoder = Json {
-        prettyPrint = debugMode
-    }
-
-    val apiRoomListReqResponse = APIRoomListReqResponse(
-        matrixServers.associateBy (
-                {
-                    it.id.toString()
-                },
-                {
-                    pro.wsmi.roommap.lib.api.MatrixServer(it.name, it.apiURL, it.updateFreq)
-                }
-        ),
-        matrixServers.associateBy(
-                { server ->
-                    server.id.toString()
-                },
-                { server ->
-                    server.matrixRooms.map {
-                        pro.wsmi.roommap.lib.api.MatrixRoom(it.roomId, it.aliases, it.canonicalAlias, it.name, it.numJoinedMembers, it.topic, it.worldReadable, it.guestCanJoin, it.avatarUrl)
-                    }
-                }
-        )
-    )
-
-    Response(Status.OK).body(jsonEncoder.encodeToString(APIRoomListReqResponse.serializer(), apiRoomListReqResponse))
-}
 
 class BaseLineCmd : CliktCommand(name = "RoomMapBackend")
 {
@@ -203,7 +176,9 @@ class BaseLineCmd : CliktCommand(name = "RoomMapBackend")
 
 
         configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
-            "/api/rooms" bind Method.GET to matrixRoomsAPIReqHandler(debugModeCLA, backendCfg, matrixServers)
+            APIRoomListReq.REQ_PATH bind Method.POST to handleAPIRoomListReq(debugModeCLA, matrixServers),
+            APIServerListReq.REQ_PATH bind Method.GET to handleAPIServerListReq(debugModeCLA, matrixServers),
+            APIServerReq.REQ_PATH bind Method.POST to handleAPIServerReq(debugModeCLA, matrixServers)
         )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }
