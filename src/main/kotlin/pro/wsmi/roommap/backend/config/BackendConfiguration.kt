@@ -11,8 +11,6 @@ import java.net.InetSocketAddress
 data class BackendConfiguration (
         @SerialName("instance_name")
         val instanceName: String,
-        @Serializable(with = InetSocketAddressSerializer::class)
-        val proxy: InetSocketAddress? = null,
         @SerialName("mongodb_configuration")
         val mongoCfg: MongoDbConfiguration,
         @SerialName("api_http_server")

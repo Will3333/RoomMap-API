@@ -6,20 +6,13 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
 import pro.wsmi.roommap.backend.config.BackendConfiguration
-import pro.wsmi.roommap.backend.matrix.api.PublicRoomsListReq200Response
-import io.ktor.client.*
-import io.ktor.client.engine.apache.*
-import io.ktor.client.features.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.util.KtorExperimentalAPI
-import io.ktor.utils.io.charsets.Charsets
+import pro.wsmi.roommap.backend.matrix.api.PublicRoomListReq200Response
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import org.http4k.client.ApacheClient
 import org.http4k.core.*
 import org.http4k.core.ContentType
 import org.http4k.filter.DebuggingFilters
@@ -31,7 +24,6 @@ import org.http4k.server.asServer
 import org.litote.kmongo.*
 import pro.wsmi.roommap.lib.api.APIRoomListReqResponse
 import java.io.File
-import java.net.Proxy
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.system.exitProcess
@@ -43,44 +35,38 @@ const val DEFAULT_CFG_FILE_NAME = ".roommap-backend.yml"
 const val MONGODB_MATRIX_SERVERS_COL_NAME = "matrix_servers"
 const val MATRIX_API_PUBLIC_ROOMS_PATH = "/_matrix/client/r0/publicRooms"
 
-@KtorExperimentalAPI
-@ExperimentalSerializationApi
-fun getHttpClients(matrixServers: List<MatrixServer>, backendCfg: BackendConfiguration) : Map<MatrixServer, HttpClient> = matrixServers.associateWith { matrixServer: MatrixServer ->
-    HttpClient(Apache) {
 
-        engine {
-            proxy = if (backendCfg.proxy != null ) Proxy(Proxy.Type.HTTP, backendCfg.proxy) else null
-        }
-        install(UserAgent) {
-            agent = "$APP_NAME/$APP_VERSION (${backendCfg.instanceName})"
-        }
-        defaultRequest {
-            url {
-                host = matrixServer.apiURL.host
-                if (matrixServer.apiURL.port != null)
-                    port = matrixServer.apiURL.port!!
-                protocol = URLProtocol(matrixServer.apiURL.protocol, -1)
-            }
-        }
-    }
+@ExperimentalSerializationApi
+fun getBaseRequests(matrixServers: List<MatrixServer>, backendCfg: BackendConfiguration) : Map<MatrixServer, Request> = matrixServers.associateWith { matrixServer ->
+
+    val req = Request(
+            method = Method.GET,
+            Uri(
+                    scheme = matrixServer.apiURL.protocol,
+                    userInfo = "",
+                    host = matrixServer.apiURL.host,
+                    port = matrixServer.apiURL.port,
+                    path = "",
+                    query = "",
+                    fragment = ""
+            )
+    )
+    req.replaceHeader("User-Agent", "$APP_NAME/$APP_VERSION (${backendCfg.instanceName})")
 }
 
 @ExperimentalSerializationApi
-suspend fun getRoomListOfServer (httpClient: HttpClient) : List<MatrixRoom>?
+fun getRoomListOfServer (baseHttpRequest: Request) : List<MatrixRoom>?
 {
-    val httpResponse = httpClient.get<HttpResponse>() {
+    val publicRoomsReq = baseHttpRequest.uri(baseHttpRequest.uri.path(MATRIX_API_PUBLIC_ROOMS_PATH))
 
-        method = HttpMethod.Get
-        url {
-            encodedPath = MATRIX_API_PUBLIC_ROOMS_PATH
-        }
-    }
+    val httpClient = ApacheClient()
+    val publicRoomsResponse = httpClient(publicRoomsReq)
 
-    val publicRoomsListReq200Response = if (httpResponse.status == HttpStatusCode.OK)
-        Json.decodeFromString(PublicRoomsListReq200Response.serializer(), httpResponse.readText(Charsets.UTF_8))
+    val publicRoomListReq200Response = if (publicRoomsResponse.status == Status.OK)
+        Json.decodeFromString(PublicRoomListReq200Response.serializer(), publicRoomsResponse.bodyString())
     else null
 
-    return publicRoomsListReq200Response?.chunk?.map {
+    return publicRoomListReq200Response?.chunk?.map {
         MatrixRoom(it.roomId, it.aliases, it.canonicalAlias, it.name, it.numJoinedMembers, it.topic, it.worldReadable, it.guestCanJoin, it.avatarUrl)
     }
 }
@@ -142,7 +128,6 @@ class BaseLineCmd : CliktCommand(name = "RoomMapBackend")
         )
     private val debugModeCLA by option("--debug", help = "Turn on the debug mode").flag()
 
-    @KtorExperimentalAPI
     @ExperimentalSerializationApi
     override fun run(): Unit = runBlocking {
         print("Loading of backend configuration ... ")
@@ -192,11 +177,11 @@ class BaseLineCmd : CliktCommand(name = "RoomMapBackend")
 
         print("First querying to Matrix servers to initialize the room list ... ")
 
-        val httpClients = getHttpClients(matrixServers, backendCfg)
+        val baseHttpRequests = getBaseRequests(matrixServers, backendCfg)
 
-        for ((server, httpClient) in httpClients)
+        for ((server, baseReq) in baseHttpRequests)
         {
-            val roomList = getRoomListOfServer(httpClient)
+            val roomList = getRoomListOfServer(baseReq)
             if (roomList != null) server.matrixRooms = roomList
         }
 
@@ -204,7 +189,7 @@ class BaseLineCmd : CliktCommand(name = "RoomMapBackend")
 
         println("Backend started")
 
-        val updateRoomJobs = httpClients.mapValues {
+        val updateRoomJobs = baseHttpRequests.mapValues {
             launch {
                 while (true)
                 {

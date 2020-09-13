@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 
 @ExperimentalSerializationApi
 @Serializable
-data class PublicRoomsListReq200Response (
+data class PublicRoomListReq200Response (
         val chunk: List<PublicRoomsChunk>,
         @SerialName("next_batch")
         val nextBatch: String? = null,
