@@ -65,12 +65,48 @@ fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) 
         }
     }
 
-    val filteredAPIRoomList = if (roomListReq.end != null)
-        sortedAPIRoomList.slice(IntRange(roomListReq.start, roomListReq.end!!))
+    val filteredByNumJoinedMembersGTEAPIRoomList = if (roomListReq.filteringNumJoinedMembersGTE != null)
+        sortedAPIRoomList.filter {
+            it.numJoinedMembers >= roomListReq.filteringNumJoinedMembersGTE!!
+        }
     else
         sortedAPIRoomList
 
-    val apiRoomListReqResponse = APIRoomListReqResponse(filteredAPIRoomList.toList())
+    val filteredByNumJoinedMembersLTEAPIRoomList = if (roomListReq.filteringNumJoinedMembersLTE != null)
+        filteredByNumJoinedMembersGTEAPIRoomList.filter {
+            it.numJoinedMembers <= roomListReq.filteringNumJoinedMembersLTE!!
+        }
+    else
+        filteredByNumJoinedMembersGTEAPIRoomList
+
+    val filteredByGuestCanJoinAPIRoomList = when(roomListReq.filteringGuestCanJoin)
+    {
+        MatrixRoomGuestCanJoinFilter.NO_FILTER -> filteredByNumJoinedMembersLTEAPIRoomList
+        MatrixRoomGuestCanJoinFilter.CAN_JOIN -> filteredByNumJoinedMembersLTEAPIRoomList.filter {
+            it.guestCanJoin
+        }
+        MatrixRoomGuestCanJoinFilter.CAN_NOT_JOIN -> filteredByNumJoinedMembersLTEAPIRoomList.filterNot {
+            it.guestCanJoin
+        }
+    }
+
+    val filteredByWorldReadableAPIRoomList = when(roomListReq.filteringWorldReadable)
+    {
+        MatrixRoomWorldReadableFilter.NO_FILTER -> filteredByGuestCanJoinAPIRoomList
+        MatrixRoomWorldReadableFilter.IS_WORLD_READABLE -> filteredByGuestCanJoinAPIRoomList.filter {
+            it.worldReadable
+        }
+        MatrixRoomWorldReadableFilter.IS_NOT_WORLD_READABLE -> filteredByGuestCanJoinAPIRoomList.filterNot {
+            it.worldReadable
+        }
+    }
+
+    val slicedAPIRoomList = if (roomListReq.end != null)
+        filteredByWorldReadableAPIRoomList.slice(IntRange(roomListReq.start, roomListReq.end!!))
+    else
+        filteredByWorldReadableAPIRoomList
+
+    val apiRoomListReqResponse = APIRoomListReqResponse(slicedAPIRoomList.toList())
 
     Response(Status.OK).body(jsonSerializer.encodeToString(APIRoomListReqResponse.serializer(), apiRoomListReqResponse))
 }
