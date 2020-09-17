@@ -101,12 +101,14 @@ fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) 
         }
     }
 
+    val roomsTotalNum = filteredByWorldReadableAPIRoomList.size
+
     val slicedAPIRoomList = if (roomListReq.end != null)
         filteredByWorldReadableAPIRoomList.slice(IntRange(roomListReq.start, roomListReq.end!!))
     else
         filteredByWorldReadableAPIRoomList
 
-    val apiRoomListReqResponse = APIRoomListReqResponse(slicedAPIRoomList.toList())
+    val apiRoomListReqResponse = APIRoomListReqResponse(slicedAPIRoomList.toList(), roomsTotalNum)
 
     Response(Status.OK).body(jsonSerializer.encodeToString(APIRoomListReqResponse.serializer(), apiRoomListReqResponse))
 }
