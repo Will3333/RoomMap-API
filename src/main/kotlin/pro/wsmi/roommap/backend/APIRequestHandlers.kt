@@ -7,6 +7,7 @@ import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status
 import pro.wsmi.roommap.lib.api.*
+import pro.wsmi.roommap.lib.api.MatrixRoom
 
 @ExperimentalSerializationApi
 fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) : HttpHandler = { req: Request ->
@@ -17,12 +18,11 @@ fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) 
 
     val roomListReq = jsonSerializer.decodeFromString(APIRoomListReq.serializer(), req.bodyString())
 
-
-    val apiRoomList = mutableListOf<pro.wsmi.roommap.lib.api.MatrixRoom>()
+    val apiRoomList = mutableListOf<MatrixRoom>()
     matrixServers.forEach { server ->
         apiRoomList.addAll(
             server.matrixRooms.map {room ->
-                pro.wsmi.roommap.lib.api.MatrixRoom(room.roomId, server.id.toString(), room.aliases, room.canonicalAlias, room.name, room.numJoinedMembers, room.topic, room.worldReadable, room.guestCanJoin, room.avatarUrl)
+                MatrixRoom(room.roomId, server.id.toString(), room.aliases, room.canonicalAlias, room.name, room.numJoinedMembers, room.topic, room.worldReadable, room.guestCanJoin, room.avatarUrl)
             }
         )
     }
@@ -104,13 +104,16 @@ fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) 
     val roomsTotalNum = filteredByWorldReadableAPIRoomList.size
 
     val slicedAPIRoomList = if (roomListReq.end != null)
-        filteredByWorldReadableAPIRoomList.slice(IntRange(roomListReq.start, roomListReq.end!!))
+        filteredByWorldReadableAPIRoomList.slice(IntRange(roomListReq.start, if (roomListReq.end!! < (roomsTotalNum-1)) roomListReq.end!! else roomsTotalNum-1))
     else
         filteredByWorldReadableAPIRoomList
 
-    val apiRoomListReqResponse = APIRoomListReqResponse(slicedAPIRoomList.toList(), roomsTotalNum)
-
-    Response(Status.OK).body(jsonSerializer.encodeToString(APIRoomListReqResponse.serializer(), apiRoomListReqResponse))
+    if (slicedAPIRoomList.isNotEmpty())
+    {
+        val apiRoomListReqResponse = APIRoomListReqResponse(slicedAPIRoomList.toList(), roomsTotalNum)
+        Response(Status.OK).body(jsonSerializer.encodeToString(APIRoomListReqResponse.serializer(), apiRoomListReqResponse))
+    }
+    else Response(Status.NOT_FOUND)
 }
 
 @ExperimentalSerializationApi
@@ -125,7 +128,7 @@ fun handleAPIServerListReq(debugMode: Boolean, matrixServers: List<MatrixServer>
             it.id.toString()
         },
         valueTransform = {
-            pro.wsmi.roommap.lib.api.MatrixServer(it.name, it.apiURL, it.updateFreq)
+            MatrixServer(it.name, it.apiURL, it.updateFreq)
         }
     )
 
