@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.la2soft"
-version = "0.1"
+version = "0.0.1"
 
 val COROUTINES_VERSION = "1.3.9"
 val SERIALIZATION_VERSION = "1.0.0-RC"
