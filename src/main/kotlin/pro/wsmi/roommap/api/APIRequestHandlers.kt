@@ -27,86 +27,67 @@ fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) 
         )
     }
 
-    val serversById = matrixServers.associateBy {
-        it.id.toString()
-    }
-
-    val sortedAPIRoomList = when(roomListReq.sortingElement)
+    val filteredRoomList = when(roomListReq.sortingElement)
     {
         MatrixRoomListSortingElement.NUM_JOINED_MEMBERS -> {
             if (roomListReq.descendingSort)
-                apiRoomList.sortedByDescending {
-                    it.numJoinedMembers
-                }
+                apiRoomList.sortedByDescending { it.numJoinedMembers }
             else
-                apiRoomList.sortedBy {
-                    it.numJoinedMembers
-                }
+                apiRoomList.sortedBy { it.numJoinedMembers }
         }
         MatrixRoomListSortingElement.ROOM_NAME -> {
             if (roomListReq.descendingSort)
-                apiRoomList.sortedByDescending {
-                    it.name
-                }
+                apiRoomList.sortedByDescending { it.name }
             else
-                apiRoomList.sortedBy {
-                    it.name
-                }
+                apiRoomList.sortedBy { it.name }
         }
         MatrixRoomListSortingElement.SERVER_NAME -> {
+            val serversById = matrixServers.associateBy { it.id.toString() }
             if (roomListReq.descendingSort)
-                apiRoomList.sortedByDescending {
-                    serversById[it.serverId]?.name
-                }
+                apiRoomList.sortedByDescending { serversById[it.serverId]?.name }
             else
-                apiRoomList.sortedBy {
-                    serversById[it.serverId]?.name
-                }
+                apiRoomList.sortedBy { serversById[it.serverId]?.name }
+        }
+    }.let {
+        if (roomListReq.filteringNumJoinedMembersGTE != null)
+            it.filter { matrixRoom -> matrixRoom.numJoinedMembers >= roomListReq.filteringNumJoinedMembersGTE!! }
+        else
+            it
+    }.let {
+        if (roomListReq.filteringNumJoinedMembersLTE != null)
+            it.filter { matrixRoom -> matrixRoom.numJoinedMembers <= roomListReq.filteringNumJoinedMembersLTE!! }
+        else
+            it
+    }.let {
+        when(roomListReq.filteringGuestCanJoin)
+        {
+            MatrixRoomGuestCanJoinFilter.NO_FILTER -> it
+            MatrixRoomGuestCanJoinFilter.CAN_JOIN -> it.filter { matrixRoom ->
+                matrixRoom.guestCanJoin
+            }
+            MatrixRoomGuestCanJoinFilter.CAN_NOT_JOIN -> it.filterNot {matrixRoom ->
+                matrixRoom.guestCanJoin
+            }
+        }
+    }.let {
+        when(roomListReq.filteringWorldReadable)
+        {
+            MatrixRoomWorldReadableFilter.NO_FILTER -> it
+            MatrixRoomWorldReadableFilter.IS_WORLD_READABLE -> it.filter { matrixRoom ->
+                matrixRoom.worldReadable
+            }
+            MatrixRoomWorldReadableFilter.IS_NOT_WORLD_READABLE -> it.filterNot { matrixRoom ->
+                matrixRoom.worldReadable
+            }
         }
     }
 
-    val filteredByNumJoinedMembersGTEAPIRoomList = if (roomListReq.filteringNumJoinedMembersGTE != null)
-        sortedAPIRoomList.filter {
-            it.numJoinedMembers >= roomListReq.filteringNumJoinedMembersGTE!!
-        }
-    else
-        sortedAPIRoomList
-
-    val filteredByNumJoinedMembersLTEAPIRoomList = if (roomListReq.filteringNumJoinedMembersLTE != null)
-        filteredByNumJoinedMembersGTEAPIRoomList.filter {
-            it.numJoinedMembers <= roomListReq.filteringNumJoinedMembersLTE!!
-        }
-    else
-        filteredByNumJoinedMembersGTEAPIRoomList
-
-    val filteredByGuestCanJoinAPIRoomList = when(roomListReq.filteringGuestCanJoin)
-    {
-        MatrixRoomGuestCanJoinFilter.NO_FILTER -> filteredByNumJoinedMembersLTEAPIRoomList
-        MatrixRoomGuestCanJoinFilter.CAN_JOIN -> filteredByNumJoinedMembersLTEAPIRoomList.filter {
-            it.guestCanJoin
-        }
-        MatrixRoomGuestCanJoinFilter.CAN_NOT_JOIN -> filteredByNumJoinedMembersLTEAPIRoomList.filterNot {
-            it.guestCanJoin
-        }
-    }
-
-    val filteredByWorldReadableAPIRoomList = when(roomListReq.filteringWorldReadable)
-    {
-        MatrixRoomWorldReadableFilter.NO_FILTER -> filteredByGuestCanJoinAPIRoomList
-        MatrixRoomWorldReadableFilter.IS_WORLD_READABLE -> filteredByGuestCanJoinAPIRoomList.filter {
-            it.worldReadable
-        }
-        MatrixRoomWorldReadableFilter.IS_NOT_WORLD_READABLE -> filteredByGuestCanJoinAPIRoomList.filterNot {
-            it.worldReadable
-        }
-    }
-
-    val roomsTotalNum = filteredByWorldReadableAPIRoomList.size
+    val roomsTotalNum = filteredRoomList.size
 
     val slicedAPIRoomList = if (roomListReq.end != null)
-        filteredByWorldReadableAPIRoomList.slice(IntRange(roomListReq.start, if (roomListReq.end!! < (roomsTotalNum-1)) roomListReq.end!! else roomsTotalNum-1))
+        filteredRoomList.slice(IntRange(roomListReq.start, if (roomListReq.end!! < (roomsTotalNum-1)) roomListReq.end!! else roomsTotalNum-1))
     else
-        filteredByWorldReadableAPIRoomList
+        filteredRoomList
 
     if (slicedAPIRoomList.isNotEmpty())
     {
