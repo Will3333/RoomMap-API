@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "pro.wsmi"
-version = "0.1.0"
+version = "0.0.1"
 
 val ROOMMAP_LIB_VERSION = "0.1.0"
 val COROUTINES_VERSION = "1.3.9"

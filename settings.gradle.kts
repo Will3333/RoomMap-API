@@ -1,2 +1,2 @@
-rootProject.name = "roommap-backend"
+rootProject.name = "roommap-api"
 
