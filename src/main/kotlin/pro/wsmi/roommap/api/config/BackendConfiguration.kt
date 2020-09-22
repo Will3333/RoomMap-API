@@ -1,10 +1,8 @@
-package pro.wsmi.roommap.backend.config
+package pro.wsmi.roommap.api.config
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import pro.wsmi.kwsmilib.jvm.serialization.InetSocketAddressSerializer
-import java.net.InetSocketAddress
 
 @ExperimentalSerializationApi
 @Serializable

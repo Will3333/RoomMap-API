@@ -1,4 +1,4 @@
-package pro.wsmi.roommap.backend.config
+package pro.wsmi.roommap.api.config
 
 import kotlinx.serialization.Serializable
 

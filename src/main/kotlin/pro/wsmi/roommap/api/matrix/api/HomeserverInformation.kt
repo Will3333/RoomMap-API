@@ -1,4 +1,4 @@
-package pro.wsmi.roommap.backend.matrix.api
+package pro.wsmi.roommap.api.matrix.api
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
@@ -7,7 +7,7 @@ import pro.wsmi.kwsmilib.net.URL
 
 @ExperimentalSerializationApi
 @Serializable
-data class IdentityServerInformation (
+data class HomeserverInformation (
     @SerialName("base_url")
     val baseUrl: URL
 )

@@ -1,4 +1,4 @@
-package pro.wsmi.roommap.backend
+package pro.wsmi.roommap.api
 
 data class MatrixRoom (
     val roomId: String,

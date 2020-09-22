@@ -1,12 +1,12 @@
-package pro.wsmi.roommap.backend
+package pro.wsmi.roommap.api
 
 import com.charleskorn.kaml.Yaml
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
-import pro.wsmi.roommap.backend.config.BackendConfiguration
-import pro.wsmi.roommap.backend.matrix.api.PublicRoomListReq200Response
+import pro.wsmi.roommap.api.config.BackendConfiguration
+import pro.wsmi.roommap.api.matrix.api.PublicRoomListReq200Response
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking

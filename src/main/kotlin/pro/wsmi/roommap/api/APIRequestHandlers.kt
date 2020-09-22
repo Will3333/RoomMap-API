@@ -1,4 +1,4 @@
-package pro.wsmi.roommap.backend
+package pro.wsmi.roommap.api
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
