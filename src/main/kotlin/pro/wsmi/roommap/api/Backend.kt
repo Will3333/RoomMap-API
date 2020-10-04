@@ -69,7 +69,17 @@ fun getRoomListOfServer (baseHttpRequest: Request) : List<MatrixRoom>?
     else null
 
     return publicRoomListReq200Response?.chunk?.map {
-        MatrixRoom(it.roomId, it.aliases, it.canonicalAlias, it.name, it.numJoinedMembers, it.topic, it.worldReadable, it.guestCanJoin, it.avatarUrl)
+        MatrixRoom (
+            it.roomId,
+            it.aliases,
+            it.canonicalAlias,
+            it.name?.replace(regex = Regex("[\\n\\r\\f\\t]"), "")?.replace(regex = Regex("^ +"), ""),
+            it.numJoinedMembers,
+            it.topic?.replace(regex = Regex("^[\\n\\r\\f\\t ]+"), ""),
+            it.worldReadable,
+            it.guestCanJoin,
+            it.avatarUrl
+        )
     }
 }
 
