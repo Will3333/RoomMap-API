@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     kotlin("jvm") version "1.4.10"
     kotlin("plugin.serialization") version "1.4.10"
+    application
 }
 
 group = "pro.wsmi"
@@ -42,3 +43,7 @@ dependencies {
 
 val compileKotlin: KotlinCompile by tasks
 compileKotlin.kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8.toString()
+
+application {
+    mainClassName = "pro.wsmi.roommap.api.BackendKt"
+}

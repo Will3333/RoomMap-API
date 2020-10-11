@@ -33,7 +33,7 @@ import kotlin.system.exitProcess
 const val APP_NAME = "RoomMap-Backend"
 const val APP_VERSION = "0.1.0"
 val DEFAULT_CFG_FILE_DIR = File(System.getProperty("user.home"))
-const val DEFAULT_CFG_FILE_NAME = ".roommap-backend.yml"
+const val DEFAULT_CFG_FILE_NAME = ".roommap-api.yml"
 const val MONGODB_MATRIX_SERVERS_COL_NAME = "matrix_servers"
 const val MATRIX_API_PUBLIC_ROOMS_PATH = "/_matrix/client/r0/publicRooms"
 
@@ -98,7 +98,7 @@ fun configureAPIGlobalHttpFilter(debugMode: Boolean, backendCfg: BackendConfigur
 }
 
 
-class BaseLineCmd : CliktCommand(name = "RoomMapBackend")
+class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 {
     private val cfgFilePathCLA: File? by option("-f", "--config-file", help = "Path of the backend configuration file")
         .file (
