@@ -5,5 +5,5 @@ mongodb_configuration:
     port: 27017
   database_name: roommap 
 api_http_server:
-  port: 9999
+  port: 80
   compression: "true"
