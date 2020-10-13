@@ -1,7 +1,7 @@
 instance_name: RoomMap.org
 mongodb_configuration:
   server:
-    host: 192.168.11.195
+    host: mongodb
     port: 27017
   database_name: roommap 
 api_http_server:
