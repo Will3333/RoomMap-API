@@ -11,6 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import org.http4k.client.ApacheClient
 import org.http4k.core.*
@@ -38,6 +39,7 @@ const val MONGODB_MATRIX_SERVERS_COL_NAME = "matrix_servers"
 const val MATRIX_API_PUBLIC_ROOMS_PATH = "/_matrix/client/r0/publicRooms"
 
 
+@ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
 fun getBaseRequests(matrixServers: List<MatrixServer>, backendCfg: BackendConfiguration) : Map<MatrixServer, Request> = matrixServers.associateWith { matrixServer ->
 
@@ -57,30 +59,37 @@ fun getBaseRequests(matrixServers: List<MatrixServer>, backendCfg: BackendConfig
 }
 
 @ExperimentalSerializationApi
-fun getRoomListOfServer (baseHttpRequest: Request) : List<MatrixRoom>?
+fun getRoomListOfServer (baseHttpRequest: Request) : Result<List<MatrixRoom>>
 {
     val publicRoomsReq = baseHttpRequest.uri(baseHttpRequest.uri.path(MATRIX_API_PUBLIC_ROOMS_PATH))
 
     val httpClient = ApacheClient()
     val publicRoomsResponse = httpClient(publicRoomsReq)
 
-    val publicRoomListReq200Response = if (publicRoomsResponse.status == Status.OK)
-        Json.decodeFromString(PublicRoomListReq200Response.serializer(), publicRoomsResponse.bodyString())
-    else null
+    if (publicRoomsResponse.status != Status.OK)
+        return Result.failure(Exception("The server ${baseHttpRequest.uri.host} returned the HTTP code ${publicRoomsResponse.status.code}."))
 
-    return publicRoomListReq200Response?.chunk?.map {
-        MatrixRoom (
-            it.roomId,
-            it.aliases,
-            it.canonicalAlias,
-            it.name?.replace(regex = Regex("[\\n\\r\\f\\t]"), "")?.replace(regex = Regex("^ +"), ""),
-            it.numJoinedMembers,
-            it.topic?.replace(regex = Regex("^[\\n\\r\\f\\t ]+"), ""),
-            it.worldReadable,
-            it.guestCanJoin,
-            it.avatarUrl
-        )
+    val publicRoomListReq200Response = try {
+        Json.decodeFromString(PublicRoomListReq200Response.serializer(), publicRoomsResponse.bodyString())
+    } catch (e: SerializationException) {
+        return Result.failure(e)
     }
+
+    return Result.success(
+        publicRoomListReq200Response.chunk.map {
+            MatrixRoom (
+                it.roomId,
+                it.aliases,
+                it.canonicalAlias,
+                it.name?.replace(regex = Regex("[\\n\\r\\f\\t]"), "")?.replace(regex = Regex("^ +"), ""),
+                it.numJoinedMembers,
+                it.topic?.replace(regex = Regex("^[\\n\\r\\f\\t ]+"), ""),
+                it.worldReadable,
+                it.guestCanJoin,
+                it.avatarUrl
+            )
+        }
+    )
 }
 
 @ExperimentalSerializationApi
@@ -98,6 +107,7 @@ fun configureAPIGlobalHttpFilter(debugMode: Boolean, backendCfg: BackendConfigur
 }
 
 
+@ExperimentalUnsignedTypes
 class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 {
     private val cfgFilePathCLA: File? by option("-f", "--config-file", help = "Path of the backend configuration file")
@@ -156,16 +166,24 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         val matrixServers = matrixServersCol.find().toList()
 
+        val enabledMatrixServers = matrixServers.filterNot { it.disabled }.toMutableList()
+
+
         println("OK")
 
         print("First querying to Matrix servers to initialize the room list ... ")
 
-        val baseHttpRequests = getBaseRequests(matrixServers, backendCfg)
+        val baseHttpRequests = getBaseRequests(enabledMatrixServers, backendCfg)
 
         for ((server, baseReq) in baseHttpRequests)
         {
-            val roomList = getRoomListOfServer(baseReq)
-            if (roomList != null) server.matrixRooms = roomList
+            val roomListResult = getRoomListOfServer(baseReq)
+            val roomList = roomListResult.getOrElse {
+                println("FAILED")
+                it.printStackTrace()
+                exitProcess(10)
+            }
+            if (roomList.isNotEmpty()) server.matrixRooms = roomList
         }
 
         println("OK")
@@ -174,23 +192,36 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         val updateRoomJobs = baseHttpRequests.mapValues {
             launch {
-                while (true)
+                while (it.key.tryBeforeDisabling > 0u)
                 {
                     delay(it.key.updateFreq)
 
-                    val roomList = getRoomListOfServer(it.value)
+                    val roomListResult = getRoomListOfServer(it.value)
+                    val roomList = roomListResult.getOrElse { _ ->
+
+                        it.key.tryBeforeDisabling--
+                        null
+                    }
                     if (roomList != null) it.key.matrixRooms = roomList
+                }
+
+                if (it.key.tryBeforeDisabling == 0u)
+                {
+                    it.key.disabled = true
+                    matrixServersCol.updateOne (MatrixServer::id eq it.key.id, it.key)
+                    enabledMatrixServers.remove(it.key)
                 }
             }
         }
 
 
         configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
-            APIRoomListReq.REQ_PATH bind Method.POST to handleAPIRoomListReq(debugModeCLA, matrixServers),
-            APIServerListReq.REQ_PATH bind Method.GET to handleAPIServerListReq(debugModeCLA, matrixServers),
-            APIServerReq.REQ_PATH bind Method.POST to handleAPIServerReq(debugModeCLA, matrixServers)
+            APIRoomListReq.REQ_PATH bind Method.POST to handleAPIRoomListReq(debugModeCLA, enabledMatrixServers),
+            APIServerListReq.REQ_PATH bind Method.GET to handleAPIServerListReq(debugModeCLA, enabledMatrixServers),
+            APIServerReq.REQ_PATH bind Method.POST to handleAPIServerReq(debugModeCLA, enabledMatrixServers)
         )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }
 
+@ExperimentalUnsignedTypes
 fun main(args: Array<String>) = BaseLineCmd().main(args)

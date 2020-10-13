@@ -42,7 +42,14 @@ dependencies {
 }
 
 val compileKotlin: KotlinCompile by tasks
-compileKotlin.kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8.toString()
+compileKotlin.kotlinOptions {
+    jvmTarget = JavaVersion.VERSION_1_8.toString()
+    freeCompilerArgs = freeCompilerArgs.toMutableList().let {
+        it.add("-Xallow-result-return-type")
+        it
+    }.toList()
+}
+
 
 application {
     mainClassName = "pro.wsmi.roommap.api.BackendKt"

@@ -10,8 +10,11 @@ import org.http4k.core.Status
 import pro.wsmi.roommap.lib.api.*
 import pro.wsmi.roommap.lib.api.MatrixRoom
 
+@ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
-fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) : HttpHandler = { req: Request ->
+fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: MutableList<MatrixServer>) : HttpHandler = { req: Request ->
+
+    val frozenMatrixServerList = matrixServers.toList()
 
     val jsonSerializer = Json {
         prettyPrint = debugMode
@@ -26,7 +29,7 @@ fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) 
     if (roomListReq != null)
     {
         val apiRoomList = mutableListOf<MatrixRoom>()
-        matrixServers.forEach { server ->
+        frozenMatrixServerList.forEach { server ->
             apiRoomList.addAll(
                     server.matrixRooms.map {room ->
                         MatrixRoom(room.roomId, server.id.toString(), room.aliases, room.canonicalAlias, room.name, room.numJoinedMembers, room.topic, room.worldReadable, room.guestCanJoin, room.avatarUrl)
@@ -49,7 +52,7 @@ fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) 
                     apiRoomList.sortedBy { it.name }
             }
             MatrixRoomListSortingElement.SERVER_NAME -> {
-                val serversById = matrixServers.associateBy { it.id.toString() }
+                val serversById = frozenMatrixServerList.associateBy { it.id.toString() }
                 if (roomListReq.descendingSort)
                     apiRoomList.sortedByDescending { serversById[it.serverId]?.name }
                 else
@@ -117,14 +120,17 @@ fun handleAPIRoomListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) 
         Response(Status.NOT_FOUND)
 }
 
+@ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
-fun handleAPIServerListReq(debugMode: Boolean, matrixServers: List<MatrixServer>) : HttpHandler = {
+fun handleAPIServerListReq(debugMode: Boolean, matrixServers: MutableList<MatrixServer>) : HttpHandler = {
+
+    val frozenMatrixServerList = matrixServers.toList()
 
     val jsonSerializer = Json {
         prettyPrint = debugMode
     }
 
-    val serverList = matrixServers.associateBy(
+    val serverList = frozenMatrixServerList.associateBy(
         keySelector = {
             it.id.toString()
         },
@@ -147,8 +153,11 @@ fun handleAPIServerListReq(debugMode: Boolean, matrixServers: List<MatrixServer>
         Response(Status.INTERNAL_SERVER_ERROR)
 }
 
+@ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
-fun handleAPIServerReq(debugMode: Boolean, matrixServers: List<MatrixServer>) : HttpHandler = { req ->
+fun handleAPIServerReq(debugMode: Boolean, matrixServers: MutableList<MatrixServer>) : HttpHandler = { req ->
+
+    val frozenMatrixServerList = matrixServers.toList()
 
     val jsonSerializer = Json {
         prettyPrint = debugMode
@@ -163,7 +172,7 @@ fun handleAPIServerReq(debugMode: Boolean, matrixServers: List<MatrixServer>) : 
     if (serverReq != null)
     {
         var foundServer : MatrixServer? = null
-        for (server in matrixServers)
+        for (server in frozenMatrixServerList)
         {
             if (server.id.toString() == serverReq.serverId)
             {

@@ -9,6 +9,7 @@ import org.litote.kmongo.Id
 import org.litote.kmongo.newId
 import pro.wsmi.kwsmilib.net.URL
 
+@ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
 @Serializable
 data class MatrixServer (
@@ -20,6 +21,10 @@ data class MatrixServer (
         val apiURL: URL,
         @SerialName("update_frequency")
         val updateFreq: Long = 3600000L,
+        @SerialName("disabled")
+        var disabled: Boolean = false,
+        @Transient
+        var tryBeforeDisabling: UInt = 3u,
         @Transient
         var matrixRooms: List<MatrixRoom> = listOf()
 )
