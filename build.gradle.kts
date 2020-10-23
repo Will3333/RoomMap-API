@@ -25,7 +25,8 @@ val SERIALIZATION_VERSION = "1.0.0"
 val KAML_VERSION = "0.21.0"
 val CLIKT_VERSION = "3.0.0"
 val KWSMILIB_VERSION = "0.10.0"
-val KMONGO_VERSION= "4.1.2"
+val EXPOSED_VERSION= "0.28.1"
+val POSTGRESQL_JDBC_VERSION = "42.2.18"
 val HTTP4K_VERSION = "3.260.0"
 
 
@@ -43,9 +44,9 @@ dependencies {
     implementation("com.charleskorn.kaml:kaml:$KAML_VERSION")
     implementation("com.github.ajalt.clikt:clikt:$CLIKT_VERSION")
     implementation("pro.wsmi:kwsmilib-jvm:$KWSMILIB_VERSION")
-    implementation("org.litote.kmongo:kmongo:$KMONGO_VERSION")
-    implementation("org.litote.kmongo:kmongo-coroutine-serialization:$KMONGO_VERSION")
-    implementation("org.litote.kmongo:kmongo-id-serialization:$KMONGO_VERSION")
+    implementation("org.jetbrains.exposed:exposed-core:$EXPOSED_VERSION")
+    implementation("org.jetbrains.exposed:exposed-jdbc:$EXPOSED_VERSION")
+    implementation("org.postgresql:postgresql:$POSTGRESQL_JDBC_VERSION")
     implementation("org.http4k:http4k-core:$HTTP4K_VERSION")
     implementation("org.http4k:http4k-client-apache:$HTTP4K_VERSION")
     implementation("org.http4k:http4k-server-jetty:$HTTP4K_VERSION")

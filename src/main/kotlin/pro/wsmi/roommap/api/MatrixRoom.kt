@@ -10,14 +10,21 @@
 
 package pro.wsmi.roommap.api
 
+import kotlinx.serialization.ExperimentalSerializationApi
+import pro.wsmi.kwsmilib.language.Language
+
+@ExperimentalSerializationApi
 data class MatrixRoom (
-    val roomId: String,
-    val aliases: List<String>? = null,
-    val canonicalAlias: String? = null,
-    val name: String? = null,
-    val numJoinedMembers: Int,
-    val topic: String? = null,
-    val worldReadable: Boolean,
-    val guestCanJoin: Boolean,
-    val avatarUrl: String? = null
+    val id: String,
+    var aliases: Set<String>? = null,
+    var canonicalAlias: String? = null,
+    var name: String? = null,
+    var numJoinedMembers: Int,
+    var topic: String? = null,
+    var worldReadable: Boolean,
+    var guestCanJoin: Boolean,
+    var avatarUrl: String? = null,
+    var excluded: Boolean = false,
+    var languages: List<Language>? = null,
+    var tags: Set<MatrixRoomTag>? = null
 )

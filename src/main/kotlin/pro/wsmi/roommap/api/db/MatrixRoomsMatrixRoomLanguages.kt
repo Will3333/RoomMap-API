@@ -8,12 +8,14 @@
  *  See the License for the specific language governing permissions and limitations under the License.
  */
 
-package pro.wsmi.roommap.api.config
+package pro.wsmi.roommap.api.db
 
-import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.Table
 
-@Serializable
-data class MongoDbCredentials (
-    val username: String,
-    val password: String
-)
+object MatrixRoomsMatrixRoomLanguages : Table(name = "matrix_room_matrix_room_language")
+{
+    val room = reference("room_id", MatrixRooms.id)
+    val language: Column<String> = varchar(name = "language", length = 3)
+    override val primaryKey = PrimaryKey(room, language)
+}

@@ -32,13 +32,14 @@ import org.http4k.routing.bind
 import org.http4k.routing.routes
 import org.http4k.server.Jetty
 import org.http4k.server.asServer
-import org.litote.kmongo.*
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.transactions.transaction
+import pro.wsmi.kwsmilib.net.URL
+import pro.wsmi.roommap.api.db.MatrixServers
 import pro.wsmi.roommap.lib.api.APIRoomListReq
 import pro.wsmi.roommap.lib.api.APIServerListReq
 import pro.wsmi.roommap.lib.api.APIServerReq
 import java.io.File
-import java.util.logging.Level
-import java.util.logging.Logger
 import kotlin.system.exitProcess
 
 const val APP_NAME = "RoomMap-API"
@@ -161,23 +162,41 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         print("Connection to database ... ")
 
-        Logger.getLogger("org.mongodb.driver").level = Level.OFF
-
-        val mongoClient = KMongo.createClient(
-            "mongodb://${if (backendCfg.mongoCfg.credentials != null) backendCfg.mongoCfg.credentials.username + ":" + backendCfg.mongoCfg.credentials.password + "@" else ""}${backendCfg.mongoCfg.server.hostString}:${backendCfg.mongoCfg.server.port}"
-        )
-        val mongoDB = mongoClient.getDatabase(backendCfg.mongoCfg.dbName)
+        val database = try {
+            Database.connect (
+                url = "jdbc:postgresql://${if (backendCfg.dbCfg.credentials != null) backendCfg.dbCfg.credentials.username + ":" + backendCfg.dbCfg.credentials.password + "@" else ""}${backendCfg.dbCfg.server.hostString}:${backendCfg.dbCfg.server.port}/${backendCfg.dbCfg.dbName}",
+                driver = "org.postgresql.Driver"
+            )
+        } catch (e: Exception) {
+            println("FAILED")
+            println("Unable to connect to the database.")
+            if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
+            else println(e.localizedMessage)
+            exitProcess(4)
+        }
 
         println("OK")
 
         print("Loading of matrix servers list ... ")
 
-        val matrixServersCol = mongoDB.getCollection<MatrixServer>(MONGODB_MATRIX_SERVERS_COL_NAME)
+        val enabledMatrixServers = transaction(database) {
+            MatrixServers.select(where = not(MatrixServers.disabled)).mapNotNull {
 
-        val matrixServers = matrixServersCol.find().toList()
-
-        val enabledMatrixServers = matrixServers.filterNot { it.disabled }.toMutableList()
-
+                val apiUrl = URL.parseURL(it[MatrixServers.apiUrl])
+                if (apiUrl != null)
+                {
+                    MatrixServer(
+                        id = it[MatrixServers.id].value.toUInt(),
+                        name = it[MatrixServers.name],
+                        apiURL = apiUrl,
+                        updateFreq = it[MatrixServers.updateFrequency],
+                        disabled = it[MatrixServers.disabled],
+                        tryBeforeDisabling = it[MatrixServers.tryBeforeDisabling]
+                    )
+                }
+                else null
+            }
+        }
 
         println("OK")
 

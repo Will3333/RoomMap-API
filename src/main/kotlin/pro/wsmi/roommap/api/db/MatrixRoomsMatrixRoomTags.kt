@@ -8,19 +8,13 @@
  *  See the License for the specific language governing permissions and limitations under the License.
  */
 
-package pro.wsmi.roommap.api.config
+package pro.wsmi.roommap.api.db
 
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.sql.Table
 
-@ExperimentalSerializationApi
-@Serializable
-data class BackendConfiguration (
-        @SerialName("instance_name")
-        val instanceName: String,
-        @SerialName("database_configuration")
-        val dbCfg: DbConfiguration,
-        @SerialName("api_http_server")
-        val apiHttpServer: APIHttpServer
-)
+object MatrixRoomsMatrixRoomTags : Table(name = "matrix_room_matrix_room_tag")
+{
+    val room = reference("room_id", MatrixRooms.id)
+    val tag = reference(name = "tag_id", MatrixRoomTags.id)
+    override val primaryKey = PrimaryKey(room, tag)
+}

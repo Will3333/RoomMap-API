@@ -1,9 +1,12 @@
 instance_name: RoomMap.org
-mongodb_configuration:
+database_configuration:
   server:
-    host: mongodb
+    host: postgresql
     port: 27017
-  database_name: roommap 
+  database_name: roommap
+  credentials:
+    username: root
+    password: password
 api_http_server:
   port: 80
   compression: "true"

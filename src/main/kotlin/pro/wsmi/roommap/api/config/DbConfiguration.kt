@@ -18,10 +18,11 @@ import java.net.InetSocketAddress
 
 @ExperimentalSerializationApi
 @Serializable
-data class MongoDbConfiguration (
+data class DbConfiguration (
     @Serializable(with = InetSocketAddressSerializer::class)
     val server: InetSocketAddress,
     @SerialName("database_name")
     val dbName: String,
-    val credentials: MongoDbCredentials? = null
+    @SerialName("credentials")
+    val credentials: DbCredentials? = null
 )

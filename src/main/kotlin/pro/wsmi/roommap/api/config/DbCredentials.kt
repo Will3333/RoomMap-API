@@ -10,17 +10,13 @@
 
 package pro.wsmi.roommap.api.config
 
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-@ExperimentalSerializationApi
 @Serializable
-data class BackendConfiguration (
-        @SerialName("instance_name")
-        val instanceName: String,
-        @SerialName("database_configuration")
-        val dbCfg: DbConfiguration,
-        @SerialName("api_http_server")
-        val apiHttpServer: APIHttpServer
+data class DbCredentials (
+    @SerialName("username")
+    val username: String,
+    @SerialName("password")
+    val password: String
 )
