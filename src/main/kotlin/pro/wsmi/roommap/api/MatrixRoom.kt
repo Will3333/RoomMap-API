@@ -11,15 +11,23 @@
 package pro.wsmi.roommap.api
 
 import kotlinx.serialization.ExperimentalSerializationApi
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.transactions.transaction
 import pro.wsmi.kwsmilib.language.Language
+import pro.wsmi.roommap.api.db.MatrixRooms
+import pro.wsmi.roommap.api.db.MatrixRoomsMatrixRoomLanguages
+import pro.wsmi.roommap.api.db.MatrixRoomsMatrixRoomTags
+import pro.wsmi.roommap.api.matrix.api.PublicRoomsChunk
 
 @ExperimentalSerializationApi
-data class MatrixRoom (
+class MatrixRoom @ExperimentalUnsignedTypes
+private constructor (
     val id: String,
     var aliases: Set<String>? = null,
     var canonicalAlias: String? = null,
     var name: String? = null,
-    var numJoinedMembers: Int,
+    var numJoinedMembers: UInt,
     var topic: String? = null,
     var worldReadable: Boolean,
     var guestCanJoin: Boolean,
@@ -28,3 +36,51 @@ data class MatrixRoom (
     var languages: List<Language>? = null,
     var tags: Set<MatrixRoomTag>? = null
 )
+{
+    companion object
+    {
+        @ExperimentalUnsignedTypes
+        fun new(dbCon: Database, matrixServer: MatrixServer, matrixServerRoomChunk: PublicRoomsChunk, excluded: Boolean = false, languages: List<Language>? = null, tags: Set<MatrixRoomTag>? = null) : MatrixRoom
+        {
+            val newTag = MatrixRoom(
+                id = matrixServerRoomChunk.roomId,
+                aliases = matrixServerRoomChunk.aliases?.toSet(),
+                canonicalAlias = matrixServerRoomChunk.canonicalAlias,
+                name = matrixServerRoomChunk.name
+                    ?.replace(regex = Regex("[\\n\\r\\f\\t]"), "")
+                    ?.replace(regex = Regex("^ +"), ""),
+                numJoinedMembers = matrixServerRoomChunk.numJoinedMembers.toUInt(),
+                topic = matrixServerRoomChunk.topic
+                    ?.replace(regex = Regex("^[\\n\\r\\f\\t ]+"), ""),
+                worldReadable = matrixServerRoomChunk.worldReadable,
+                guestCanJoin = matrixServerRoomChunk.guestCanJoin,
+                avatarUrl = matrixServerRoomChunk.avatarUrl,
+                excluded = excluded,
+                languages = languages,
+                tags = tags
+            )
+
+            transaction(dbCon) {
+                MatrixRooms.insert {
+                    it[MatrixRooms.id] = newTag.id
+                    it[MatrixRooms.server] = matrixServer.id.toInt()
+                    it[MatrixRooms.excluded] = newTag.excluded
+                }
+                newTag.languages?.forEach { lang ->
+                    MatrixRoomsMatrixRoomLanguages.insert {
+                        it[MatrixRoomsMatrixRoomLanguages.room] = newTag.id
+                        it[MatrixRoomsMatrixRoomLanguages.language] = lang.name
+                    }
+                }
+                newTag.tags?.forEach {tag ->
+                    MatrixRoomsMatrixRoomTags.insert {
+                        it[MatrixRoomsMatrixRoomTags.room] = newTag.id
+                        it[MatrixRoomsMatrixRoomTags.tag] = tag.id
+                    }
+                }
+            }
+            
+            return newTag
+        }
+    }
+}
