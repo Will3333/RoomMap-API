@@ -25,14 +25,10 @@ import pro.wsmi.roommap.api.db.*
 import pro.wsmi.roommap.api.matrix.api.PublicRoomListReq200Response
 
 @ExperimentalSerializationApi
-class BusinessData(private val backendCfg: BackendConfiguration)
+class BusinessData private constructor(private val dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>)
 {
-    private val dbConn = Database.connect (
-        url = "jdbc:postgresql://${if (backendCfg.dbCfg.credentials != null) backendCfg.dbCfg.credentials.username + ":" + backendCfg.dbCfg.credentials.password + "@" else ""}${backendCfg.dbCfg.server.hostString}:${backendCfg.dbCfg.server.port}/${backendCfg.dbCfg.dbName}",
-        driver = "org.postgresql.Driver"
-    )
-
-    var matrixRoomTags: Map<String, MatrixRoomTag> = MatrixRoomTag.getAllTags(this.dbConn)
+    var matrixRoomTags: Map<String, MatrixRoomTag> = matrixRoomTags
+        private set
 
     @ExperimentalUnsignedTypes
     var matrixServers: List<MatrixServer> = listOf()
@@ -63,6 +59,24 @@ class BusinessData(private val backendCfg: BackendConfiguration)
 
     companion object
     {
+        fun new(backendCfg: BackendConfiguration) : Result<BusinessData>
+        {
+            val dbConn = try {
+                Database.connect (
+                    url = "jdbc:postgresql://${if (backendCfg.dbCfg.credentials != null) backendCfg.dbCfg.credentials.username + ":" + backendCfg.dbCfg.credentials.password + "@" else ""}${backendCfg.dbCfg.server.hostString}:${backendCfg.dbCfg.server.port}/${backendCfg.dbCfg.dbName}",
+                    driver = "org.postgresql.Driver"
+                )
+            } catch (e: Exception) {
+                return Result.failure(e)
+            }
+
+            val tags = MatrixRoomTag.getAllTags(dbConn).getOrElse { e ->
+                return Result.failure(e)
+            }
+
+            return Result.success(BusinessData(dbConn = dbConn, matrixRoomTags = tags))
+        }
+
         @ExperimentalUnsignedTypes
         private fun updateMatrixRoomList(backendCfg: BackendConfiguration, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>, dbConn: Database) : Pair<MatrixServer, Exception?>
         {

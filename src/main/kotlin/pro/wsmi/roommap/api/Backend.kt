@@ -46,7 +46,6 @@ const val APP_NAME = "RoomMap-API"
 const val APP_VERSION = "0.1.0"
 val DEFAULT_CFG_FILE_DIR = File(System.getProperty("user.home"))
 const val DEFAULT_CFG_FILE_NAME = ".roommap-api.yml"
-const val MATRIX_API_PUBLIC_ROOMS_PATH = "/_matrix/client/r0/publicRooms"
 
 
 @ExperimentalSerializationApi

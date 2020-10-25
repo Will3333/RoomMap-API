@@ -16,6 +16,7 @@ import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import pro.wsmi.roommap.api.db.MatrixRoomTags
+import java.sql.SQLException
 
 class MatrixRoomTag private constructor (
     val id: String,
@@ -39,7 +40,7 @@ class MatrixRoomTag private constructor (
 
     companion object
     {
-        fun new(dbCon: Database, id: String, unavailable: Boolean = false, parent: MatrixRoomTag? = null) : MatrixRoomTag
+        fun new(dbCon: Database, id: String, unavailable: Boolean = false, parent: MatrixRoomTag? = null) : Result<MatrixRoomTag>
         {
             val newTag = MatrixRoomTag(
                 id = id,
@@ -47,66 +48,82 @@ class MatrixRoomTag private constructor (
                 parent = parent
             )
 
-            transaction(dbCon) {
-                MatrixRoomTags.insert {
-                    it[MatrixRoomTags.id] = newTag.id
-                    it[MatrixRoomTags.unavailable] = newTag.unavailable
-                    it[MatrixRoomTags.parent] = newTag.parent?.id
+            try {
+                transaction(dbCon) {
+                    MatrixRoomTags.insert {
+                        it[MatrixRoomTags.id] = newTag.id
+                        it[MatrixRoomTags.unavailable] = newTag.unavailable
+                        it[MatrixRoomTags.parent] = newTag.parent?.id
+                    }
                 }
+            } catch (e: SQLException) {
+                return Result.failure(e)
             }
 
-            return newTag
+            return Result.success(newTag)
         }
 
-        fun getAllTags(dbCon: Database) : Map<String, MatrixRoomTag>
+        fun getAllTags(dbCon: Database) : Result<Map<String, MatrixRoomTag>>
         {
             val tags = mutableMapOf<String, MatrixRoomTag>()
 
-            tags.putAll(transaction(dbCon) {
-                MatrixRoomTags.select{ MatrixRoomTags.parent eq null }
-                    .map {
-                        MatrixRoomTag(
-                            id = it[MatrixRoomTags.id],
-                            unavailable = it[MatrixRoomTags.unavailable]
-                        )
-                    }
-                    .associateBy {
-                        it.id
-                    }
-            })
+            try {
+                tags.putAll(transaction(dbCon) {
+                    MatrixRoomTags.select{ MatrixRoomTags.parent eq null }
+                        .map {
+                            MatrixRoomTag(
+                                id = it[MatrixRoomTags.id],
+                                unavailable = it[MatrixRoomTags.unavailable]
+                            )
+                        }
+                        .associateBy {
+                            it.id
+                        }
+                })
+            } catch (e: SQLException) {
+                return Result.failure(e)
+            }
 
             val frozenTagList = tags.toMap()
             frozenTagList.forEach {(_, tag) ->
-                tags.putAll(getAllChildTags(dbCon = dbCon, parent = tag))
+                tags.putAll(getAllChildTags(dbCon = dbCon, parent = tag).getOrElse { e ->
+                    return Result.failure(e)
+                })
             }
 
-            return tags
+            return Result.success(tags)
         }
 
-        fun getAllChildTags(dbCon: Database, parent: MatrixRoomTag) : Map<String, MatrixRoomTag>
+        fun getAllChildTags(dbCon: Database, parent: MatrixRoomTag) : Result<Map<String, MatrixRoomTag>>
         {
             val tags = mutableMapOf<String, MatrixRoomTag>()
 
-            tags.putAll(transaction(dbCon) {
-                MatrixRoomTags.select{ MatrixRoomTags.parent eq parent.id }
-                    .map {
-                        MatrixRoomTag(
-                            id = it[MatrixRoomTags.id],
-                            unavailable = it[MatrixRoomTags.unavailable],
-                            parent = parent
-                        )
-                    }
-                    .associateBy {
-                        it.id
-                    }
-            })
+            try {
+                tags.putAll(transaction(dbCon) {
+                    MatrixRoomTags.select{ MatrixRoomTags.parent eq parent.id }
+                        .map {
+                            MatrixRoomTag(
+                                id = it[MatrixRoomTags.id],
+                                unavailable = it[MatrixRoomTags.unavailable],
+                                parent = parent
+                            )
+                        }
+                        .associateBy {
+                            it.id
+                        }
+                })
+            } catch (e: SQLException) {
+                return Result.failure(e)
+            }
 
             val frozenTagList = tags.toMap()
             frozenTagList.forEach {(_, tag) ->
-                tags.putAll(getAllChildTags(dbCon = dbCon, parent = tag))
+                tags.putAll(getAllChildTags(dbCon = dbCon, parent = tag).getOrElse { e ->
+                    return Result.failure(e)
+                })
             }
 
-            return tags
+            return Result.success(tags)
         }
     }
 }
