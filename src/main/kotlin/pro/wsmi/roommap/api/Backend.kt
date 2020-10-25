@@ -16,14 +16,10 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
 import pro.wsmi.roommap.api.config.BackendConfiguration
-import pro.wsmi.roommap.api.matrix.api.PublicRoomListReq200Response
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
-import org.http4k.client.ApacheClient
 import org.http4k.core.*
 import org.http4k.core.ContentType
 import org.http4k.filter.DebuggingFilters
@@ -33,9 +29,6 @@ import org.http4k.routing.routes
 import org.http4k.server.Jetty
 import org.http4k.server.asServer
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.transaction
-import pro.wsmi.kwsmilib.net.URL
-import pro.wsmi.roommap.api.db.MatrixServers
 import pro.wsmi.roommap.lib.api.APIRoomListReq
 import pro.wsmi.roommap.lib.api.APIServerListReq
 import pro.wsmi.roommap.lib.api.APIServerReq
@@ -124,11 +117,7 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         print("Loading of business data ... ")
 
-
-        val businessData = try {
-            BusinessData(backendCfg = backendCfg)
-        } catch (e: Exception)
-        {
+        val businessData = BusinessData.new(backendCfg = backendCfg).getOrElse { e ->
             println("FAILED")
             println("Unable to load business data.")
             if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
@@ -138,14 +127,11 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         println("OK")
 
-        print("Getting matrix server list and room data ... ")
+        print("Getting Matrix room lists ... ")
 
-        try {
-            businessData.updateMatrixServers()
-        } catch (e: Exception)
-        {
+        businessData.updateMatrixServerRoomLists().getOrElse { e ->
             println("FAILED")
-            println("Unable to get server list or to get room data.")
+            println("Unable to get Matrix room lists.")
             if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
             else println(e.localizedMessage)
             exitProcess(6)

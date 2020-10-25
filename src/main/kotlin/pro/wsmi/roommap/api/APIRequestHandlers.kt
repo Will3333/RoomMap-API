@@ -145,7 +145,7 @@ fun handleAPIServerListReq(debugMode: Boolean, matrixServers: MutableList<Matrix
             it.id.toString()
         },
         valueTransform = {
-            MatrixServer(it.name, it.apiURL, it.updateFreq)
+            MatrixServer(it.name, it.apiUrl, it.updateFreq)
         }
     )
 
@@ -193,7 +193,7 @@ fun handleAPIServerReq(debugMode: Boolean, matrixServers: MutableList<MatrixServ
 
         if (foundServer != null)
         {
-            val apiServerReqResponse = APIServerReqResponse(foundServer.id.toString(), MatrixServer(foundServer.name, foundServer.apiURL, foundServer.updateFreq))
+            val apiServerReqResponse = APIServerReqResponse(foundServer.id.toString(), MatrixServer(foundServer.name, foundServer.apiUrl, foundServer.updateFreq))
 
             val responseBodyStr = try {
                 jsonSerializer.encodeToString(APIServerReqResponse.serializer(), apiServerReqResponse)

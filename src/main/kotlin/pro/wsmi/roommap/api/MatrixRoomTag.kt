@@ -20,27 +20,31 @@ import java.sql.SQLException
 
 class MatrixRoomTag private constructor (
     val id: String,
-    val unavailable: Boolean = false,
-    val parent: MatrixRoomTag? = null
+    val unavailable: Boolean,
+    val parent: MatrixRoomTag?
 )
 {
-    fun update(dbCon: Database, unavailable: Boolean = this.unavailable, parent: MatrixRoomTag? = this.parent) : MatrixRoomTag
+    fun update(dbConn: Database, unavailable: Boolean = this.unavailable, parent: MatrixRoomTag? = this.parent) : Result<MatrixRoomTag>
     {
         val newTag = MatrixRoomTag(id = this.id, unavailable = unavailable, parent = parent)
 
-        transaction(dbCon) {
-            MatrixRoomTags.update({ MatrixRoomTags.id eq this@MatrixRoomTag.id }) {
-                it[MatrixRoomTags.unavailable] = newTag.unavailable
-                it[MatrixRoomTags.parent] = newTag.parent?.id
+        try {
+            transaction(dbConn) {
+                MatrixRoomTags.update({ MatrixRoomTags.id eq this@MatrixRoomTag.id }) {
+                    it[MatrixRoomTags.unavailable] = newTag.unavailable
+                    it[MatrixRoomTags.parent] = newTag.parent?.id
+                }
             }
+        } catch (e: SQLException) {
+            return Result.failure(e)
         }
 
-        return newTag
+        return Result.success(newTag)
     }
 
     companion object
     {
-        fun new(dbCon: Database, id: String, unavailable: Boolean = false, parent: MatrixRoomTag? = null) : Result<MatrixRoomTag>
+        fun new(dbConn: Database, id: String, unavailable: Boolean = false, parent: MatrixRoomTag? = null) : Result<MatrixRoomTag>
         {
             val newTag = MatrixRoomTag(
                 id = id,
@@ -49,7 +53,7 @@ class MatrixRoomTag private constructor (
             )
 
             try {
-                transaction(dbCon) {
+                transaction(dbConn) {
                     MatrixRoomTags.insert {
                         it[MatrixRoomTags.id] = newTag.id
                         it[MatrixRoomTags.unavailable] = newTag.unavailable
@@ -73,7 +77,8 @@ class MatrixRoomTag private constructor (
                         .map {
                             MatrixRoomTag(
                                 id = it[MatrixRoomTags.id],
-                                unavailable = it[MatrixRoomTags.unavailable]
+                                unavailable = it[MatrixRoomTags.unavailable],
+                                parent = null
                             )
                         }
                         .associateBy {

@@ -32,17 +32,17 @@ import java.sql.SQLException
 @ExperimentalSerializationApi
 class MatrixRoom @ExperimentalUnsignedTypes private constructor (
     val id: String,
-    var aliases: Set<String>? = null,
-    var canonicalAlias: String? = null,
-    var name: String? = null,
-    var numJoinedMembers: UInt,
-    var topic: String? = null,
-    var worldReadable: Boolean,
-    var guestCanJoin: Boolean,
-    var avatarUrl: String? = null,
-    var excluded: Boolean = false,
-    var languages: List<Language>? = null,
-    var tags: Set<MatrixRoomTag>? = null
+    val aliases: Set<String>?,
+    val canonicalAlias: String?,
+    val name: String?,
+    val numJoinedMembers: UInt,
+    val topic: String?,
+    val worldReadable: Boolean,
+    val guestCanJoin: Boolean,
+    val avatarUrl: String?,
+    val excluded: Boolean,
+    val languages: List<Language>?,
+    val tags: Set<MatrixRoomTag>?
 )
 {
     companion object
@@ -53,7 +53,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
         private fun String.filterTopic() : String = this.replace(regex = Regex("^[\\n\\r\\f\\t ]+"), "")
 
         @ExperimentalUnsignedTypes
-        fun new(dbCon: Database, matrixServer: MatrixServer, matrixServerRoomChunk: PublicRoomsChunk, excluded: Boolean = false, languages: List<Language>? = null, tags: Set<MatrixRoomTag>? = null) : Result<MatrixRoom>
+        fun new(dbConn: Database, matrixServer: MatrixServer, matrixServerRoomChunk: PublicRoomsChunk, excluded: Boolean = false, languages: List<Language>? = null, tags: Set<MatrixRoomTag>? = null) : Result<MatrixRoom>
         {
             val newTag = MatrixRoom(
                 id = matrixServerRoomChunk.roomId,
@@ -71,7 +71,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
             )
 
             try {
-                transaction(dbCon) {
+                transaction(dbConn) {
                     MatrixRooms.insert {
                         it[MatrixRooms.id] = newTag.id
                         it[MatrixRooms.server] = matrixServer.id.toInt()
@@ -100,7 +100,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
         @ExperimentalUnsignedTypes
         fun getAllRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>) : Result<List<MatrixRoom>>
         {
-            val baseHttpRequest = getBaseRequest(backendCfg, matrixServer.apiURL)
+            val baseHttpRequest = getBaseRequest(backendCfg, matrixServer.apiUrl)
 
             val publicRoomListReq = baseHttpRequest.uri(baseHttpRequest.uri.path(MATRIX_API_PUBLIC_ROOMS_PATH))
             val publicRoomListResponse = ApacheClient()(publicRoomListReq)
