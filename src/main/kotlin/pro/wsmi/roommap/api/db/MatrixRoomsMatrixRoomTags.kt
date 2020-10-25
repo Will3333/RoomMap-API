@@ -10,11 +10,12 @@
 
 package pro.wsmi.roommap.api.db
 
+import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.Table
 
 object MatrixRoomsMatrixRoomTags : Table(name = "matrix_room_matrix_room_tag")
 {
-    val room = reference("room_id", MatrixRooms.id)
-    val tag = reference(name = "tag_id", MatrixRoomTags.id)
+    val room = reference(name ="room_id", MatrixRooms.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
+    val tag = reference(name = "tag_id", MatrixRoomTags.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
     override val primaryKey = PrimaryKey(room, tag)
 }

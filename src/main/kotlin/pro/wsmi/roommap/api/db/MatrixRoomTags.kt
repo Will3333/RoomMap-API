@@ -11,12 +11,15 @@
 package pro.wsmi.roommap.api.db
 
 import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.Table
 
 object MatrixRoomTags : Table(name = "matrix_room_tag")
 {
     val id: Column<String> = varchar(name = "id", length = 255)
     val unavailable : Column<Boolean> = bool("unavailable").default(defaultValue = false)
-    val parent = reference(name = "parent", MatrixRoomTags.id).nullable().default(null)
+    val parent = reference(name = "parent", id, onDelete = ReferenceOption.SET_NULL, onUpdate = ReferenceOption.CASCADE)
+        .nullable()
+        .default(null)
     override val primaryKey = PrimaryKey(id)
 }

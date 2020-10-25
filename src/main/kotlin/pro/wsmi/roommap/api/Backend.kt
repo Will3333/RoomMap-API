@@ -46,43 +46,8 @@ const val APP_NAME = "RoomMap-API"
 const val APP_VERSION = "0.1.0"
 val DEFAULT_CFG_FILE_DIR = File(System.getProperty("user.home"))
 const val DEFAULT_CFG_FILE_NAME = ".roommap-api.yml"
-const val MONGODB_MATRIX_SERVERS_COL_NAME = "matrix_servers"
 const val MATRIX_API_PUBLIC_ROOMS_PATH = "/_matrix/client/r0/publicRooms"
 
-
-@ExperimentalSerializationApi
-fun getRoomListOfServer (baseHttpRequest: Request) : Result<List<MatrixRoom>>
-{
-    val publicRoomsReq = baseHttpRequest.uri(baseHttpRequest.uri.path(MATRIX_API_PUBLIC_ROOMS_PATH))
-
-    val httpClient = ApacheClient()
-    val publicRoomsResponse = httpClient(publicRoomsReq)
-
-    if (publicRoomsResponse.status != Status.OK)
-        return Result.failure(Exception("The server ${baseHttpRequest.uri.host} returned the HTTP code ${publicRoomsResponse.status.code}."))
-
-    val publicRoomListReq200Response = try {
-        Json.decodeFromString(PublicRoomListReq200Response.serializer(), publicRoomsResponse.bodyString())
-    } catch (e: SerializationException) {
-        return Result.failure(e)
-    }
-
-    return Result.success(
-        publicRoomListReq200Response.chunk.map {
-            MatrixRoom (
-                it.roomId,
-                it.aliases,
-                it.canonicalAlias,
-                it.name?.replace(regex = Regex("[\\n\\r\\f\\t]"), "")?.replace(regex = Regex("^ +"), ""),
-                it.numJoinedMembers,
-                it.topic?.replace(regex = Regex("^[\\n\\r\\f\\t ]+"), ""),
-                it.worldReadable,
-                it.guestCanJoin,
-                it.avatarUrl
-            )
-        }
-    )
-}
 
 @ExperimentalSerializationApi
 fun configureAPIGlobalHttpFilter(debugMode: Boolean, backendCfg: BackendConfiguration) : Filter
@@ -158,42 +123,33 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         println("OK")
 
-        print("Loading of matrix servers list ... ")
+        print("Loading of business data ... ")
 
-        val enabledMatrixServers = transaction(database) {
-            MatrixServers.select(where = not(MatrixServers.disabled)).mapNotNull {
 
-                val apiUrl = URL.parseURL(it[MatrixServers.apiUrl])
-                if (apiUrl != null)
-                {
-                    MatrixServer(
-                        id = it[MatrixServers.id].value.toUInt(),
-                        name = it[MatrixServers.name],
-                        apiURL = apiUrl,
-                        updateFreq = it[MatrixServers.updateFrequency],
-                        disabled = it[MatrixServers.disabled],
-                        tryBeforeDisabling = it[MatrixServers.tryBeforeDisabling]
-                    )
-                }
-                else null
-            }
+        val businessData = try {
+            BusinessData(backendCfg = backendCfg)
+        } catch (e: Exception)
+        {
+            println("FAILED")
+            println("Unable to load business data.")
+            if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
+            else println(e.localizedMessage)
+            exitProcess(5)
         }
 
         println("OK")
 
-        print("First querying to Matrix servers to initialize the room list ... ")
+        print("Getting matrix server list and room data ... ")
 
-        val baseHttpRequests = getBaseRequests(enabledMatrixServers, backendCfg)
-
-        for ((server, baseReq) in baseHttpRequests)
+        try {
+            businessData.updateMatrixServers()
+        } catch (e: Exception)
         {
-            val roomListResult = getRoomListOfServer(baseReq)
-            val roomList = roomListResult.getOrElse {
-                println("FAILED")
-                it.printStackTrace()
-                exitProcess(10)
-            }
-            if (roomList.isNotEmpty()) server.matrixRooms = roomList
+            println("FAILED")
+            println("Unable to get server list or to get room data.")
+            if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
+            else println(e.localizedMessage)
+            exitProcess(6)
         }
 
         println("OK")

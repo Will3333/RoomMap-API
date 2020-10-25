@@ -32,25 +32,7 @@ class BusinessData(private val backendCfg: BackendConfiguration)
         driver = "org.postgresql.Driver"
     )
 
-    var matrixRoomTags: Map<String, MatrixRoomTag> = mutableMapOf<String, MatrixRoomTag>().let { tags ->
-
-        transaction(this.dbConn) {
-            MatrixRoomTags.select(where = MatrixRoomTags.parent eq null).forEach {
-
-                val id = it[MatrixRoomTags.id]
-                tags[id] = MatrixRoomTag(
-                    id = id,
-                    unavailable = it[MatrixRoomTags.unavailable]
-                )
-            }
-        }
-
-        for((id, tag) in tags) {
-            tags.putAll(getChildMatrixRoomTagsFromDb(tag, this.dbConn))
-        }
-
-        tags
-    }
+    var matrixRoomTags: Map<String, MatrixRoomTag> = MatrixRoomTag.getAllTags(this.dbConn)
 
     @ExperimentalUnsignedTypes
     var matrixServers: List<MatrixServer> = listOf()
@@ -70,7 +52,6 @@ class BusinessData(private val backendCfg: BackendConfiguration)
                         apiURL = apiUrl,
                         updateFreq = it[MatrixServers.updateFrequency],
                         disabled = it[MatrixServers.disabled],
-                        tryBeforeDisabling = it[MatrixServers.tryBeforeDisabling]
                     )
 
                     updateMatrixRoomList(backendCfg, initialServer, this@BusinessData.matrixRoomTags, this@BusinessData.dbConn).getOrThrow()
@@ -82,29 +63,8 @@ class BusinessData(private val backendCfg: BackendConfiguration)
 
     companion object
     {
-        private fun getChildMatrixRoomTagsFromDb(parent: MatrixRoomTag, dbConn: Database) : Map<String, MatrixRoomTag>
-        {
-            val tags = transaction(dbConn) {
-                MatrixRoomTags.select(where = MatrixRoomTags.parent eq parent.id).map {
-                    MatrixRoomTag(
-                        id = it[MatrixRoomTags.id],
-                        unavailable = it[MatrixRoomTags.unavailable],
-                        parent = parent
-                    )
-                }
-            }.associateBy {
-                it.id
-            }.toMutableMap()
-
-            for((_, tag) in tags) {
-                tags.putAll(getChildMatrixRoomTagsFromDb(tag, dbConn))
-            }
-
-            return tags
-        }
-
         @ExperimentalUnsignedTypes
-        private fun updateMatrixRoomList(backendCfg: BackendConfiguration, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>, dbConn: Database) : Result<MatrixServer>
+        private fun updateMatrixRoomList(backendCfg: BackendConfiguration, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>, dbConn: Database) : Pair<MatrixServer, Exception?>
         {
             val baseHttpRequest = getBaseRequest(backendCfg, matrixServer.apiURL)
 
@@ -112,7 +72,18 @@ class BusinessData(private val backendCfg: BackendConfiguration)
             val httpClient = ApacheClient()
             val publicRoomListResponse = httpClient(publicRoomListReq)
             if (publicRoomListResponse.status != Status.OK)
+            {
+                val disabled = matrixServer.tryBeforeDisabling <= 1u
+                if (disabled)
+                    transaction(dbConn) {
+                        MatrixServers.update({MatrixServers.id eq matrixServer.id.toInt()}) {
+
+                        }
+                    }
+                matrixServer.copy(disabled = disabled, tryBeforeDisabling = matrixServer.tryBeforeDisabling-1u)
                 return Result.failure(Exception("The server ${baseHttpRequest.uri.host} returned the HTTP code ${publicRoomListResponse.status.code}."))
+            }
+
 
             val publicRoomListReq200Response = try {
                 Json.decodeFromString(PublicRoomListReq200Response.serializer(), publicRoomListResponse.bodyString())

@@ -11,12 +11,13 @@
 package pro.wsmi.roommap.api.db
 
 import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.Table
 
 object MatrixRooms : Table(name = "matrix_room")
 {
     val id: Column<String> = varchar(name = "id", length = 512)
-    val server = reference("server_id", MatrixServers.id)
+    val server = reference("server_id", MatrixServers.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
     val excluded: Column<Boolean> = bool("excluded").default(defaultValue = false)
     override val primaryKey = PrimaryKey(this.id)
 }

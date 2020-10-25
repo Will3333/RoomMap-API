@@ -10,8 +10,103 @@
 
 package pro.wsmi.roommap.api
 
-data class MatrixRoomTag (
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
+import pro.wsmi.roommap.api.db.MatrixRoomTags
+
+class MatrixRoomTag private constructor (
     val id: String,
-    var unavailable: Boolean = false,
-    var parent: MatrixRoomTag? = null
+    val unavailable: Boolean = false,
+    val parent: MatrixRoomTag? = null
 )
+{
+    fun update(dbCon: Database, unavailable: Boolean = this.unavailable, parent: MatrixRoomTag? = this.parent) : MatrixRoomTag
+    {
+        val newTag = MatrixRoomTag(id = this.id, unavailable = unavailable, parent = parent)
+
+        transaction(dbCon) {
+            MatrixRoomTags.update({ MatrixRoomTags.id eq this@MatrixRoomTag.id }) {
+                it[MatrixRoomTags.unavailable] = newTag.unavailable
+                it[MatrixRoomTags.parent] = newTag.parent?.id
+            }
+        }
+
+        return newTag
+    }
+
+    companion object
+    {
+        fun new(dbCon: Database, id: String, unavailable: Boolean = false, parent: MatrixRoomTag? = null) : MatrixRoomTag
+        {
+            val newTag = MatrixRoomTag(
+                id = id,
+                unavailable = unavailable,
+                parent = parent
+            )
+
+            transaction(dbCon) {
+                MatrixRoomTags.insert {
+                    it[MatrixRoomTags.id] = newTag.id
+                    it[MatrixRoomTags.unavailable] = newTag.unavailable
+                    it[MatrixRoomTags.parent] = newTag.parent?.id
+                }
+            }
+
+            return newTag
+        }
+
+        fun getAllTags(dbCon: Database) : Map<String, MatrixRoomTag>
+        {
+            val tags = mutableMapOf<String, MatrixRoomTag>()
+
+            tags.putAll(transaction(dbCon) {
+                MatrixRoomTags.select{ MatrixRoomTags.parent eq null }
+                    .map {
+                        MatrixRoomTag(
+                            id = it[MatrixRoomTags.id],
+                            unavailable = it[MatrixRoomTags.unavailable]
+                        )
+                    }
+                    .associateBy {
+                        it.id
+                    }
+            })
+
+            val frozenTagList = tags.toMap()
+            frozenTagList.forEach {(_, tag) ->
+                tags.putAll(getAllChildTags(dbCon = dbCon, parent = tag))
+            }
+
+            return tags
+        }
+
+        fun getAllChildTags(dbCon: Database, parent: MatrixRoomTag) : Map<String, MatrixRoomTag>
+        {
+            val tags = mutableMapOf<String, MatrixRoomTag>()
+
+            tags.putAll(transaction(dbCon) {
+                MatrixRoomTags.select{ MatrixRoomTags.parent eq parent.id }
+                    .map {
+                        MatrixRoomTag(
+                            id = it[MatrixRoomTags.id],
+                            unavailable = it[MatrixRoomTags.unavailable],
+                            parent = parent
+                        )
+                    }
+                    .associateBy {
+                        it.id
+                    }
+            })
+
+            val frozenTagList = tags.toMap()
+            frozenTagList.forEach {(_, tag) ->
+                tags.putAll(getAllChildTags(dbCon = dbCon, parent = tag))
+            }
+
+            return tags
+        }
+    }
+}

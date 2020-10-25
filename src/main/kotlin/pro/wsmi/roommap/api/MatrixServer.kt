@@ -21,6 +21,6 @@ data class MatrixServer (
         val apiURL: URL,
         var updateFreq: ULong = 3600000u,
         var disabled: Boolean = false,
-        var tryBeforeDisabling: UInt = 3u,
+        val tryBeforeDisabling: UInt = 3u,
         val rooms: List<MatrixRoom> = listOf()
 )

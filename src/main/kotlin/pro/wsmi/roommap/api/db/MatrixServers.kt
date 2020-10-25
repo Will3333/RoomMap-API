@@ -20,6 +20,4 @@ object MatrixServers : IntIdTable(name = "matrix_server")
     @ExperimentalUnsignedTypes
     val updateFrequency: Column<ULong> = ulong(name = "update_frequency").default(defaultValue = 3600000u)
     val disabled: Column<Boolean> = bool(name = "disabled").default(defaultValue = false)
-    @ExperimentalUnsignedTypes
-    val tryBeforeDisabling: Column<UInt> = uinteger(name = "try_before_disabling").default(defaultValue = 3u)
 }
