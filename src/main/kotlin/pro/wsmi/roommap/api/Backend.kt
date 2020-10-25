@@ -117,7 +117,7 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         print("Loading of business data ... ")
 
-        val businessData = BusinessData.new(backendCfg = backendCfg).getOrElse { e ->
+        val businessData = Engine.new(backendCfg = backendCfg).getOrElse { e ->
             println("FAILED")
             println("Unable to load business data.")
             if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
