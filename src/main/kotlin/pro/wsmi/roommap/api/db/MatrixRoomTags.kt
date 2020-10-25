@@ -17,5 +17,6 @@ object MatrixRoomTags : Table(name = "matrix_room_tag")
 {
     val id: Column<String> = varchar(name = "id", length = 255)
     val unavailable : Column<Boolean> = bool("unavailable").default(defaultValue = false)
+    val parent = reference(name = "parent", MatrixRoomTags.id).nullable().default(null)
     override val primaryKey = PrimaryKey(id)
 }

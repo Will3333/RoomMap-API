@@ -11,6 +11,7 @@
 package pro.wsmi.roommap.api
 
 data class MatrixRoomTag (
-    val id : String,
-    var unavailable: Boolean = false
+    val id: String,
+    var unavailable: Boolean = false,
+    var parent: MatrixRoomTag? = null
 )

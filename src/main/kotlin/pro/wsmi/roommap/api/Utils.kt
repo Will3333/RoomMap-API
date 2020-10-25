@@ -11,16 +11,23 @@
 package pro.wsmi.roommap.api
 
 import kotlinx.serialization.ExperimentalSerializationApi
+import org.http4k.core.Method
+import org.http4k.core.Request
+import org.http4k.core.Uri
 import pro.wsmi.kwsmilib.net.URL
+import pro.wsmi.roommap.api.config.BackendConfiguration
 
 @ExperimentalSerializationApi
-@ExperimentalUnsignedTypes
-data class MatrixServer (
-        val id: UInt,
-        val name: String,
-        val apiURL: URL,
-        var updateFreq: ULong = 3600000u,
-        var disabled: Boolean = false,
-        var tryBeforeDisabling: UInt = 3u,
-        val rooms: List<MatrixRoom> = listOf()
-)
+fun getBaseRequest(backendCfg: BackendConfiguration, url: URL) : Request = Request (
+
+    method = Method.GET,
+    uri = Uri(
+        scheme = url.protocol,
+        userInfo = "",
+        host = url.host,
+        port = url.port,
+        path = "",
+        query = "",
+        fragment = ""
+    )
+).replaceHeader("User-Agent", "$APP_NAME/$APP_VERSION (${backendCfg.instanceName})")

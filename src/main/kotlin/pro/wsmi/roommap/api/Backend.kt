@@ -50,25 +50,6 @@ const val MONGODB_MATRIX_SERVERS_COL_NAME = "matrix_servers"
 const val MATRIX_API_PUBLIC_ROOMS_PATH = "/_matrix/client/r0/publicRooms"
 
 
-@ExperimentalUnsignedTypes
-@ExperimentalSerializationApi
-fun getBaseRequests(matrixServers: List<MatrixServer>, backendCfg: BackendConfiguration) : Map<MatrixServer, Request> = matrixServers.associateWith { matrixServer ->
-
-    val req = Request(
-            method = Method.GET,
-            Uri(
-                    scheme = matrixServer.apiURL.protocol,
-                    userInfo = "",
-                    host = matrixServer.apiURL.host,
-                    port = matrixServer.apiURL.port,
-                    path = "",
-                    query = "",
-                    fragment = ""
-            )
-    )
-    req.replaceHeader("User-Agent", "$APP_NAME/$APP_VERSION (${backendCfg.instanceName})")
-}
-
 @ExperimentalSerializationApi
 fun getRoomListOfServer (baseHttpRequest: Request) : Result<List<MatrixRoom>>
 {

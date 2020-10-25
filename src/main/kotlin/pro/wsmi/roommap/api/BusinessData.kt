@@ -11,21 +11,46 @@
 package pro.wsmi.roommap.api
 
 import kotlinx.serialization.ExperimentalSerializationApi
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.not
-import org.jetbrains.exposed.sql.select
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import org.http4k.client.ApacheClient
+import org.http4k.core.Status
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
+import pro.wsmi.kwsmilib.language.Language
 import pro.wsmi.kwsmilib.net.URL
-import pro.wsmi.roommap.api.config.DbConfiguration
-import pro.wsmi.roommap.api.db.MatrixServers
+import pro.wsmi.roommap.api.config.BackendConfiguration
+import pro.wsmi.roommap.api.db.*
+import pro.wsmi.roommap.api.matrix.api.PublicRoomListReq200Response
 
 @ExperimentalSerializationApi
-class BusinessData(private val dbCfg: DbConfiguration)
+class BusinessData(private val backendCfg: BackendConfiguration)
 {
-    private val database = Database.connect (
-        url = "jdbc:postgresql://${if (dbCfg.credentials != null) dbCfg.credentials.username + ":" + dbCfg.credentials.password + "@" else ""}${dbCfg.server.hostString}:${dbCfg.server.port}/${dbCfg.dbName}",
+    private val dbConn = Database.connect (
+        url = "jdbc:postgresql://${if (backendCfg.dbCfg.credentials != null) backendCfg.dbCfg.credentials.username + ":" + backendCfg.dbCfg.credentials.password + "@" else ""}${backendCfg.dbCfg.server.hostString}:${backendCfg.dbCfg.server.port}/${backendCfg.dbCfg.dbName}",
         driver = "org.postgresql.Driver"
     )
+
+    var matrixRoomTags: Map<String, MatrixRoomTag> = mutableMapOf<String, MatrixRoomTag>().let { tags ->
+
+        transaction(this.dbConn) {
+            MatrixRoomTags.select(where = MatrixRoomTags.parent eq null).forEach {
+
+                val id = it[MatrixRoomTags.id]
+                tags[id] = MatrixRoomTag(
+                    id = id,
+                    unavailable = it[MatrixRoomTags.unavailable]
+                )
+            }
+        }
+
+        for((id, tag) in tags) {
+            tags.putAll(getChildMatrixRoomTagsFromDb(tag, this.dbConn))
+        }
+
+        tags
+    }
 
     @ExperimentalUnsignedTypes
     var matrixServers: List<MatrixServer> = listOf()
@@ -33,13 +58,13 @@ class BusinessData(private val dbCfg: DbConfiguration)
     @ExperimentalUnsignedTypes
     fun updateMatrixServers()
     {
-        this.matrixServers = transaction(database) {
+        this.matrixServers = transaction(this.dbConn) {
             MatrixServers.select(where = not(MatrixServers.disabled)).mapNotNull {
 
                 val apiUrl = URL.parseURL(it[MatrixServers.apiUrl])
                 if (apiUrl != null)
                 {
-                    MatrixServer(
+                    val initialServer = MatrixServer(
                         id = it[MatrixServers.id].value.toUInt(),
                         name = it[MatrixServers.name],
                         apiURL = apiUrl,
@@ -47,9 +72,113 @@ class BusinessData(private val dbCfg: DbConfiguration)
                         disabled = it[MatrixServers.disabled],
                         tryBeforeDisabling = it[MatrixServers.tryBeforeDisabling]
                     )
+
+                    updateMatrixRoomList(backendCfg, initialServer, this@BusinessData.matrixRoomTags, this@BusinessData.dbConn).getOrThrow()
                 }
                 else null
             }
+        }
+    }
+
+    companion object
+    {
+        private fun getChildMatrixRoomTagsFromDb(parent: MatrixRoomTag, dbConn: Database) : Map<String, MatrixRoomTag>
+        {
+            val tags = transaction(dbConn) {
+                MatrixRoomTags.select(where = MatrixRoomTags.parent eq parent.id).map {
+                    MatrixRoomTag(
+                        id = it[MatrixRoomTags.id],
+                        unavailable = it[MatrixRoomTags.unavailable],
+                        parent = parent
+                    )
+                }
+            }.associateBy {
+                it.id
+            }.toMutableMap()
+
+            for((_, tag) in tags) {
+                tags.putAll(getChildMatrixRoomTagsFromDb(tag, dbConn))
+            }
+
+            return tags
+        }
+
+        @ExperimentalUnsignedTypes
+        private fun updateMatrixRoomList(backendCfg: BackendConfiguration, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>, dbConn: Database) : Result<MatrixServer>
+        {
+            val baseHttpRequest = getBaseRequest(backendCfg, matrixServer.apiURL)
+
+            val publicRoomListReq = baseHttpRequest.uri(baseHttpRequest.uri.path(MATRIX_API_PUBLIC_ROOMS_PATH))
+            val httpClient = ApacheClient()
+            val publicRoomListResponse = httpClient(publicRoomListReq)
+            if (publicRoomListResponse.status != Status.OK)
+                return Result.failure(Exception("The server ${baseHttpRequest.uri.host} returned the HTTP code ${publicRoomListResponse.status.code}."))
+
+            val publicRoomListReq200Response = try {
+                Json.decodeFromString(PublicRoomListReq200Response.serializer(), publicRoomListResponse.bodyString())
+            } catch (e: SerializationException) {
+                return Result.failure(e)
+            }
+
+
+            val roomsSQLReqResult = transaction(dbConn) {
+                MatrixRooms.select(where = MatrixRooms.server eq matrixServer.id.toInt()).associateBy {
+                    it[MatrixRooms.id]
+                }
+            }
+
+
+            return Result.success(matrixServer.copy(
+                rooms = publicRoomListReq200Response.chunk.map { roomChunk ->
+
+                    val roomSQLResult = roomsSQLReqResult[roomChunk.roomId]
+
+                    if (roomSQLResult == null) {
+                        transaction(dbConn) {
+                            MatrixRooms.insert {
+                                it[id] = roomChunk.roomId
+                                it[server] = matrixServer.id.toInt()
+                            }
+                        }
+                    }
+
+                    val excludedRoom = if (roomSQLResult != null) roomSQLResult[MatrixRooms.excluded] else false
+
+                    val roomLangs = transaction(dbConn) {
+                        MatrixRoomsMatrixRoomLanguages
+                            .slice(MatrixRoomsMatrixRoomLanguages.language)
+                            .select(where = MatrixRoomsMatrixRoomLanguages.room eq roomChunk.roomId).mapNotNull {
+                                Language.valueOf(it[MatrixRoomsMatrixRoomLanguages.language])
+                            }
+                    }
+
+                    val roomTags = transaction(dbConn) {
+                        Join(
+                            table = MatrixRoomsMatrixRoomTags, otherTable = MatrixRoomTags,
+                            onColumn = MatrixRoomsMatrixRoomTags.tag, otherColumn = MatrixRoomTags.id,
+                            joinType = JoinType.INNER,
+                            additionalConstraint = { MatrixRoomsMatrixRoomTags.room eq roomChunk.roomId }
+                        ).slice(MatrixRoomsMatrixRoomTags.tag).selectAll().mapNotNull {
+                            matrixRoomTags[it[MatrixRoomsMatrixRoomTags.tag]]
+                        }.toSet()
+                    }
+
+                    MatrixRoom (
+                        id = roomChunk.roomId,
+                        aliases = roomChunk.aliases?.toSet(),
+                        canonicalAlias = roomChunk.canonicalAlias,
+                        name = roomChunk.name?.replace(regex = Regex("[\\n\\r\\f\\t]"), "")?.replace(regex = Regex("^ +"), ""),
+                        numJoinedMembers = roomChunk.numJoinedMembers,
+                        topic = roomChunk.topic?.replace(regex = Regex("^[\\n\\r\\f\\t ]+"), ""),
+                        worldReadable = roomChunk.worldReadable,
+                        guestCanJoin = roomChunk.guestCanJoin,
+                        avatarUrl = roomChunk.avatarUrl,
+                        excluded = excludedRoom,
+                        languages = if (roomLangs.isNotEmpty()) roomLangs else null,
+                        tags = if (roomTags.isNotEmpty()) roomTags else null
+                    )
+                }
+            ))
         }
     }
 }
