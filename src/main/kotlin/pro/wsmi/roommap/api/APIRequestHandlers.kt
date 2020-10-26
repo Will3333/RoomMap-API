@@ -106,7 +106,7 @@ fun handleAPIRoomListReq(debugMode: Boolean, engine: Engine) : HttpHandler = { r
         val roomsTotalNum = filteredRoomList.size
 
         val slicedAPIRoomList = if (roomListReq.end != null)
-            filteredRoomList.slice(IntRange(roomListReq.start, if (roomListReq.end!! < (roomsTotalNum-1)) roomListReq.end!! else roomsTotalNum-1))
+            filteredRoomList.slice(IntRange(roomListReq.start, if (roomListReq.end!! < roomsTotalNum-1) roomListReq.end!! else roomsTotalNum-1))
         else
             filteredRoomList
 
