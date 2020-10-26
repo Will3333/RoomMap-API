@@ -10,15 +10,13 @@
 
 package pro.wsmi.roommap.api
 
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import org.jetbrains.exposed.sql.Database
 import pro.wsmi.roommap.api.config.BackendConfiguration
 
 
+@ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
 class Engine private constructor(private val backendCfg: BackendConfiguration, private val dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServers: List<MatrixServer>)
 {
@@ -30,45 +28,60 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
         private set
 
 
-    @ExperimentalUnsignedTypes
-    fun startMatrixServerRoomListUpdatingLoops() //TODO Gérer les jobs de manière fonctionelle (et enventuellement créer une fonction qui crée un job pour un server spécifique)
-    {
-        this.matrixServers.map { server ->
-            GlobalScope.launch(start = CoroutineStart.LAZY) {
-                while (server.tryBeforeDisabling > 0u)
-                {
-                    val rooms = MatrixRoom.getAllRooms(this@Engine.backendCfg, this@Engine.dbConn, server, this@Engine.matrixRoomTags).getOrElse {
-                        //TODO log error(s)
-                        null
-                    }
+    private var matrixServerRoomUpdateJob = this.matrixServers.associateWith { server ->
 
-                    val serverIndex = this@Engine.matrixServers.indexOf(server)
-                    val newServerTryBeforeDisabling = if (rooms == null && server.tryBeforeDisabling > 0u) server.tryBeforeDisabling-1u else server.tryBeforeDisabling
-                    val newServerDisabled = if (newServerTryBeforeDisabling > 0u) server.disabled else true
-                    val newServer = server.update (
-                        dbConn = this@Engine.dbConn,
-                        tryBeforeDisabling = newServerTryBeforeDisabling,
-                        disabled = newServerDisabled,
-                        rooms = rooms ?: server.rooms
-                    ).getOrElse {
-                        //TODO log error(s)
-                        null
-                    }
-
-                    if (newServer != null)
-                    {
-                        this@Engine.matrixServers = this@Engine.matrixServers.toMutableList().let {
-                            it.remove(server)
-                            it.add(index = serverIndex, element = newServer)
-                            it
-                        }
-
-                        delay(newServer.updateFreq.toLong())
-                    }
-                    else
-                        delay(server.updateFreq.toLong())
-                }
+        GlobalScope.launch(start = CoroutineStart.LAZY) {
+            val newServer = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = server).getOrElse {
+                //TODO add error logger
+                null
             }
+
+            if (newServer != null)
+                this@Engine.updateMatrixServerList(oldServer = server, newServer = newServer)
+        }
+    }
+
+
+    @ExperimentalUnsignedTypes
+    fun startMatrixServerRoomListUpdateLoops()
+    {
+        this.matrixServerRoomUpdateJob.forEach { server, job ->
+            job.start()
+        }
+    }
+
+
+    private fun updateMatrixServerList(oldServer: MatrixServer, newServer: MatrixServer)
+    {
+        this.matrixServers = this.matrixServers.toMutableList().let { newServerList ->
+            newServerList.remove(oldServer)
+            newServerList.add(newServer)
+            newServerList.sortedBy {
+                it.name
+            }
+            newServerList.toList()
+        }
+
+        val oldJob = this.matrixServerRoomUpdateJob[oldServer]
+        val newCoroutineStartType = if(oldJob != null && (oldJob.isActive || oldJob.isCompleted || oldJob.isCancelled)) CoroutineStart.DEFAULT else CoroutineStart.LAZY
+        val newJob = GlobalScope.launch(start = newCoroutineStartType) {
+
+            if (newCoroutineStartType == CoroutineStart.DEFAULT)
+                delay(newServer.updateFreq.toLong())
+
+            val newServer2 = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = newServer).getOrElse {
+                //TODO add error logger
+                null
+            }
+
+            if (newServer2 != null)
+                this@Engine.updateMatrixServerList(oldServer = newServer, newServer = newServer2)
+        }
+
+        this.matrixServerRoomUpdateJob = this.matrixServerRoomUpdateJob.toMutableMap().let { newJobList ->
+            newJobList.remove(oldServer)
+            newJobList[newServer] = newJob
+            newJobList.toMap()
         }
     }
 
@@ -90,11 +103,31 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
                 return Result.failure(e)
             }
 
-            val matrixServersWithoutRooms = MatrixServer.getAllServers(dbConn, notDisabled = true).getOrElse { e ->
+            val matrixServersWithoutRooms = MatrixServer.getAllServers(backendCfg = backendCfg, dbConn = dbConn, notDisabled = true).getOrElse { e ->
                 return Result.failure(e)
             }
 
             return Result.success(Engine(backendCfg = backendCfg, dbConn = dbConn, matrixRoomTags = tags, matrixServers = matrixServersWithoutRooms))
+        }
+
+        private fun updateMatrixServerRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServer: MatrixServer) : Result<MatrixServer>
+        {
+            val rooms = MatrixRoom.getAllRooms(backendCfg = backendCfg, dbConn = dbConn, matrixServer = matrixServer, matrixRoomTags = matrixRoomTags).getOrElse { e ->
+                return Result.failure(e)
+            }
+
+            val newServerTryBeforeDisabling = if (matrixServer.tryBeforeDisabling > 0u) matrixServer.tryBeforeDisabling-1u else matrixServer.tryBeforeDisabling
+            val newServerDisabled = if (newServerTryBeforeDisabling > 0u) matrixServer.disabled else true
+
+            val newServer = matrixServer.update(
+                tryBeforeDisabling = newServerTryBeforeDisabling,
+                disabled = newServerDisabled,
+                rooms = rooms
+            ).getOrElse { e ->
+                return Result.failure(e)
+            }
+
+            return Result.success(newServer)
         }
     }
 }

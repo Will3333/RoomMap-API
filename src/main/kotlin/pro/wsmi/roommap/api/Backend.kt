@@ -16,8 +16,6 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
 import pro.wsmi.roommap.api.config.BackendConfiguration
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
 import org.http4k.core.*
@@ -28,7 +26,6 @@ import org.http4k.routing.bind
 import org.http4k.routing.routes
 import org.http4k.server.Jetty
 import org.http4k.server.asServer
-import org.jetbrains.exposed.sql.*
 import pro.wsmi.roommap.lib.api.APIRoomListReq
 import pro.wsmi.roommap.lib.api.APIServerListReq
 import pro.wsmi.roommap.lib.api.APIServerReq
@@ -98,26 +95,9 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         println("OK")
 
-        print("Connection to database ... ")
-
-        val database = try {
-            Database.connect (
-                url = "jdbc:postgresql://${if (backendCfg.dbCfg.credentials != null) backendCfg.dbCfg.credentials.username + ":" + backendCfg.dbCfg.credentials.password + "@" else ""}${backendCfg.dbCfg.server.hostString}:${backendCfg.dbCfg.server.port}/${backendCfg.dbCfg.dbName}",
-                driver = "org.postgresql.Driver"
-            )
-        } catch (e: Exception) {
-            println("FAILED")
-            println("Unable to connect to the database.")
-            if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
-            else println(e.localizedMessage)
-            exitProcess(4)
-        }
-
-        println("OK")
-
         print("Loading of business data ... ")
 
-        val businessData = Engine.new(backendCfg = backendCfg).getOrElse { e ->
+        val engine = Engine.new(backendCfg = backendCfg).getOrElse { e ->
             println("FAILED")
             println("Unable to load business data.")
             if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
@@ -127,49 +107,14 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         println("OK")
 
-        print("Getting Matrix room lists ... ")
-
-        businessData.updateMatrixServerRoomLists().getOrElse { e ->
-            println("FAILED")
-            println("Unable to get Matrix room lists.")
-            if (this@BaseLineCmd.debugModeCLA) e.printStackTrace()
-            else println(e.localizedMessage)
-            exitProcess(6)
-        }
-
-        println("OK")
-
         println("Backend started")
 
-        val updateRoomJobs = baseHttpRequests.mapValues {
-            launch {
-                while (it.key.tryBeforeDisabling > 0u)
-                {
-                    delay(it.key.updateFreq)
-
-                    val roomListResult = getRoomListOfServer(it.value)
-                    val roomList = roomListResult.getOrElse { _ ->
-
-                        it.key.tryBeforeDisabling--
-                        null
-                    }
-                    if (roomList != null) it.key.matrixRooms = roomList
-                }
-
-                if (it.key.tryBeforeDisabling == 0u)
-                {
-                    it.key.disabled = true
-                    matrixServersCol.updateOne (MatrixServer::id eq it.key.id, it.key)
-                    enabledMatrixServers.remove(it.key)
-                }
-            }
-        }
-
+        engine.startMatrixServerRoomListUpdateLoops()
 
         configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
-            APIRoomListReq.REQ_PATH bind Method.POST to handleAPIRoomListReq(debugModeCLA, enabledMatrixServers),
-            APIServerListReq.REQ_PATH bind Method.GET to handleAPIServerListReq(debugModeCLA, enabledMatrixServers),
-            APIServerReq.REQ_PATH bind Method.POST to handleAPIServerReq(debugModeCLA, enabledMatrixServers)
+            APIRoomListReq.REQ_PATH bind Method.POST to handleAPIRoomListReq(debugModeCLA, engine),
+            APIServerListReq.REQ_PATH bind Method.GET to handleAPIServerListReq(debugModeCLA, engine),
+            APIServerReq.REQ_PATH bind Method.POST to handleAPIServerReq(debugModeCLA, engine)
         )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }
