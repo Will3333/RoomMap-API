@@ -8,7 +8,7 @@
  *  See the License for the specific language governing permissions and limitations under the License.
  */
 
-package pro.wsmi.roommap.api
+package pro.wsmi.roommap.api.engine
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
@@ -24,6 +24,7 @@ import pro.wsmi.roommap.api.db.MatrixRoomTags
 import pro.wsmi.roommap.api.db.MatrixRooms
 import pro.wsmi.roommap.api.db.MatrixRoomsMatrixRoomLanguages
 import pro.wsmi.roommap.api.db.MatrixRoomsMatrixRoomTags
+import pro.wsmi.roommap.api.getBaseRequest
 import pro.wsmi.roommap.api.matrix.api.MATRIX_API_PUBLIC_ROOMS_PATH
 import pro.wsmi.roommap.api.matrix.api.PublicRoomListReq200Response
 import pro.wsmi.roommap.api.matrix.api.PublicRoomsChunk

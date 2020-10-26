@@ -8,7 +8,7 @@
  *  See the License for the specific language governing permissions and limitations under the License.
  */
 
-package pro.wsmi.roommap.api
+package pro.wsmi.roommap.api.engine
 
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -103,7 +103,11 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
                 return Result.failure(e)
             }
 
-            val matrixServersWithoutRooms = MatrixServer.getAllServers(backendCfg = backendCfg, dbConn = dbConn, notDisabled = true).getOrElse { e ->
+            val matrixServersWithoutRooms = MatrixServer.getAllServers(
+                backendCfg = backendCfg,
+                dbConn = dbConn,
+                notDisabled = true
+            ).getOrElse { e ->
                 return Result.failure(e)
             }
 
@@ -112,7 +116,12 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
 
         private fun updateMatrixServerRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServer: MatrixServer) : Result<MatrixServer>
         {
-            val rooms = MatrixRoom.getAllRooms(backendCfg = backendCfg, dbConn = dbConn, matrixServer = matrixServer, matrixRoomTags = matrixRoomTags).getOrElse { e ->
+            val rooms = MatrixRoom.getAllRooms(
+                backendCfg = backendCfg,
+                dbConn = dbConn,
+                matrixServer = matrixServer,
+                matrixRoomTags = matrixRoomTags
+            ).getOrElse { e ->
                 return Result.failure(e)
             }
 

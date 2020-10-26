@@ -26,6 +26,7 @@ import org.http4k.routing.bind
 import org.http4k.routing.routes
 import org.http4k.server.Jetty
 import org.http4k.server.asServer
+import pro.wsmi.roommap.api.engine.Engine
 import pro.wsmi.roommap.lib.api.APIRoomListReq
 import pro.wsmi.roommap.lib.api.APIServerListReq
 import pro.wsmi.roommap.lib.api.APIServerReq

@@ -8,7 +8,7 @@
  *  See the License for the specific language governing permissions and limitations under the License.
  */
 
-package pro.wsmi.roommap.api
+package pro.wsmi.roommap.api.engine
 
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.insert

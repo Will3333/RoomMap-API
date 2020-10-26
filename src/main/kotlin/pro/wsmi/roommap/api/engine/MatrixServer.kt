@@ -8,7 +8,7 @@
  *  See the License for the specific language governing permissions and limitations under the License.
  */
 
-package pro.wsmi.roommap.api
+package pro.wsmi.roommap.api.engine
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import org.jetbrains.exposed.sql.*
@@ -84,7 +84,8 @@ class MatrixServer @ExperimentalUnsignedTypes private constructor (
                 return Result.failure(e)
             }
 
-            return Result.success(MatrixServer(
+            return Result.success(
+                MatrixServer(
                 backendCfg = backendCfg,
                 dbConn = dbConn,
                 id = serverId.value.toUInt(),
@@ -94,7 +95,8 @@ class MatrixServer @ExperimentalUnsignedTypes private constructor (
                 disabled = disabled,
                 tryBeforeDisabling = tryBeforeDisabling,
                 rooms = listOf()
-            ))
+            )
+            )
         }
 
         @ExperimentalUnsignedTypes

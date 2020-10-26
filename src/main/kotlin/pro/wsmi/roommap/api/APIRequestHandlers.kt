@@ -17,6 +17,7 @@ import org.http4k.core.HttpHandler
 import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.Status
+import pro.wsmi.roommap.api.engine.Engine
 import pro.wsmi.roommap.lib.api.*
 import pro.wsmi.roommap.lib.api.MatrixRoom
 
@@ -181,7 +182,7 @@ fun handleAPIServerReq(debugMode: Boolean, engine: Engine) : HttpHandler = { req
 
     if (serverReq != null)
     {
-        var foundServer : MatrixServer? = null
+        var foundServer : pro.wsmi.roommap.api.engine.MatrixServer? = null
         for (server in frozenMatrixServerList)
         {
             if (server.id.toString() == serverReq.serverId)
