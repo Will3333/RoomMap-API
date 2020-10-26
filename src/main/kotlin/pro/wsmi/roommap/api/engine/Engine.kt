@@ -13,7 +13,12 @@ package pro.wsmi.roommap.api.engine
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.exists
+import org.jetbrains.exposed.sql.transactions.transaction
 import pro.wsmi.roommap.api.config.BackendConfiguration
+import pro.wsmi.roommap.api.db.*
+import java.sql.SQLException
 
 
 @ExperimentalUnsignedTypes
@@ -96,6 +101,27 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
                     driver = "org.postgresql.Driver"
                 )
             } catch (e: Exception) {
+                return Result.failure(e)
+            }
+
+            try {
+                transaction(dbConn) {
+                    if (
+                        !MatrixRoomTags.exists() ||
+                        !MatrixServers.exists() ||
+                        !MatrixRooms.exists() ||
+                        !MatrixRoomsMatrixRoomLanguages.exists() ||
+                        !MatrixRoomsMatrixRoomTags.exists()
+                    )
+                        SchemaUtils.createMissingTablesAndColumns (
+                            MatrixRoomTags,
+                            MatrixServers,
+                            MatrixRooms,
+                            MatrixRoomsMatrixRoomLanguages,
+                            MatrixRoomsMatrixRoomTags
+                        )
+                }
+            } catch (e: SQLException) {
                 return Result.failure(e)
             }
 
