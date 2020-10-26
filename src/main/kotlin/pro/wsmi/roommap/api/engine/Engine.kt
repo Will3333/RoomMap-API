@@ -23,7 +23,7 @@ import java.sql.SQLException
 
 @ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
-class Engine private constructor(private val backendCfg: BackendConfiguration, private val dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServers: List<MatrixServer>)
+class Engine private constructor(private val backendCfg: BackendConfiguration, private val debugMode: Boolean, private val dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServers: List<MatrixServer>)
 {
     var matrixRoomTags: Map<String, MatrixRoomTag> = matrixRoomTags
         private set
@@ -36,8 +36,11 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
     private var matrixServerRoomUpdateJob = this.matrixServers.associateWith { server ->
 
         GlobalScope.launch(start = CoroutineStart.LAZY) {
-            val newServer = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = server).getOrElse {
+            println("Appel de la première coroutine de maj des salons du serveur ${server.name}")
+            val newServer = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = server).getOrElse { e ->
                 //TODO add error logger
+                if (debugMode)
+                    e.printStackTrace()
                 null
             }
 
@@ -67,25 +70,36 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
             newServerList.toList()
         }
 
-        val oldJob = this.matrixServerRoomUpdateJob[oldServer]
-        val newCoroutineStartType = if(oldJob != null && (oldJob.isActive || oldJob.isCompleted || oldJob.isCancelled)) CoroutineStart.DEFAULT else CoroutineStart.LAZY
-        val newJob = GlobalScope.launch(start = newCoroutineStartType) {
+        val newJob = if (!newServer.disabled)
+        {
+            val oldJob = this.matrixServerRoomUpdateJob[oldServer]
+            val newCoroutineStartType = if(oldJob != null && (oldJob.isActive || oldJob.isCompleted || oldJob.isCancelled)) CoroutineStart.DEFAULT else CoroutineStart.LAZY
+            println("Nombre d'essai restant pour le nouveau objet du serveur ${newServer.name} : ${newServer.tryBeforeDisabling}")
+            println("Création d'une nouvelle coroutine de type ${newCoroutineStartType.name} pour le serveur ${newServer.name}")
 
-            if (newCoroutineStartType == CoroutineStart.DEFAULT)
-                delay(newServer.updateFreq.toLong())
+            GlobalScope.launch(start = newCoroutineStartType) {
 
-            val newServer2 = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = newServer).getOrElse {
-                //TODO add error logger
-                null
+                println("Appel d'une coroutine de maj des salons du serveur ${newServer.name}")
+
+                if (newCoroutineStartType == CoroutineStart.DEFAULT)
+                    delay(newServer.updateFreq.toLong())
+
+                val newServer2 = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = newServer).getOrElse { e ->
+                    //TODO add error logger
+                    if (this@Engine.debugMode)
+                        e.printStackTrace()
+                    null
+                }
+
+                if (newServer2 != null)
+                    this@Engine.updateMatrixServerList(oldServer = newServer, newServer = newServer2)
             }
-
-            if (newServer2 != null)
-                this@Engine.updateMatrixServerList(oldServer = newServer, newServer = newServer2)
         }
+        else null
 
         this.matrixServerRoomUpdateJob = this.matrixServerRoomUpdateJob.toMutableMap().let { newJobList ->
             newJobList.remove(oldServer)
-            newJobList[newServer] = newJob
+            if (newJob != null) newJobList[newServer] = newJob
             newJobList.toMap()
         }
     }
@@ -93,13 +107,28 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
     companion object
     {
         @ExperimentalUnsignedTypes
-        fun new(backendCfg: BackendConfiguration) : Result<Engine>
+        fun new(backendCfg: BackendConfiguration, debugMode: Boolean) : Result<Engine>
         {
             val dbConn = try {
-                Database.connect (
-                    url = "jdbc:postgresql://${if (backendCfg.dbCfg.credentials != null) backendCfg.dbCfg.credentials.username + ":" + backendCfg.dbCfg.credentials.password + "@" else ""}${backendCfg.dbCfg.server.hostString}:${backendCfg.dbCfg.server.port}/${backendCfg.dbCfg.dbName}",
-                    driver = "org.postgresql.Driver"
-                )
+
+                val urlStr = "jdbc:postgresql://${backendCfg.dbCfg.server.hostString}:${backendCfg.dbCfg.server.port}/${backendCfg.dbCfg.dbName}"
+                val driverStr = "org.postgresql.Driver"
+
+                if (backendCfg.dbCfg.credentials != null)
+                {
+                    Database.connect(
+                        url = urlStr,
+                        driver = driverStr,
+                        user = backendCfg.dbCfg.credentials.username,
+                        password = backendCfg.dbCfg.credentials.password
+                    )
+                }
+                else {
+                    Database.connect (
+                        url = urlStr,
+                        driver = driverStr
+                    )
+                }
             } catch (e: Exception) {
                 return Result.failure(e)
             }
@@ -137,7 +166,7 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
                 return Result.failure(e)
             }
 
-            return Result.success(Engine(backendCfg = backendCfg, dbConn = dbConn, matrixRoomTags = tags, matrixServers = matrixServersWithoutRooms))
+            return Result.success(Engine(backendCfg = backendCfg, debugMode = debugMode, dbConn = dbConn, matrixRoomTags = tags, matrixServers = matrixServersWithoutRooms))
         }
 
         private fun updateMatrixServerRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServer: MatrixServer) : Result<MatrixServer>

@@ -1,12 +1,12 @@
 instance_name: RoomMap.org
 database_configuration:
   server:
-    host: postgresql
-    port: 27017
+    host: 192.168.11.200
+    port: 5432
   database_name: roommap
   credentials:
-    username: root
-    password: password
+    username: roommap
+    password: YzgONYqaMcQdtYl9eqrx
 api_http_server:
   port: 80
   compression: "true"

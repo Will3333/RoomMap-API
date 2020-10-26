@@ -102,33 +102,44 @@ class MatrixServer @ExperimentalUnsignedTypes private constructor (
         @ExperimentalUnsignedTypes
         fun getAllServers(backendCfg: BackendConfiguration, dbConn: Database, notDisabled: Boolean = false) : Result<List<MatrixServer>>
         {
-            try {
-                return Result.success(transaction(dbConn) {
+            val servers =  try {
+                transaction(dbConn) {
                     if (notDisabled) {
                         MatrixServers.select(where = not(MatrixServers.disabled))
                     }
                     else {
                         MatrixServers.selectAll()
-                    }.orderBy(MatrixServers.name, SortOrder.ASC)
-                }.map {
-                    val apiUrlStr = it[MatrixServers.apiUrl]
-                    val apiUrl = URL.parseURL(apiUrlStr) ?: return Result.failure(Exception("Unable to parse the URL $apiUrlStr ."))
+                    }
+                        .orderBy(MatrixServers.name, SortOrder.ASC)
+                        .mapNotNull {
 
-                    MatrixServer (
-                        backendCfg = backendCfg,
-                        dbConn = dbConn,
-                        id = it[MatrixServers.id].value.toUInt(),
-                        name = it[MatrixServers.name],
-                        apiUrl = apiUrl,
-                        updateFreq = it[MatrixServers.updateFrequency],
-                        disabled = it[MatrixServers.disabled],
-                        tryBeforeDisabling = 3u,
-                        rooms = listOf()
-                    )
-                })
+                            val apiUrl = URL.parseURL(it[MatrixServers.apiUrl])
+
+                            if (apiUrl != null)
+                            {
+                                MatrixServer (
+                                    backendCfg = backendCfg,
+                                    dbConn = dbConn,
+                                    id = it[MatrixServers.id].value.toUInt(),
+                                    name = it[MatrixServers.name],
+                                    apiUrl = apiUrl,
+                                    updateFreq = it[MatrixServers.updateFrequency],
+                                    disabled = it[MatrixServers.disabled],
+                                    tryBeforeDisabling = 3u,
+                                    rooms = listOf()
+                                )
+                            }
+                            else {
+                                //TODO add error logger
+                                null
+                            }
+                        }
+                }
             } catch (e: SQLException) {
                 return Result.failure(e)
             }
+
+            return Result.success(servers)
         }
     }
 }
