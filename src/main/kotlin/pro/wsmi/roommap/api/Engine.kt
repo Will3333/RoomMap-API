@@ -45,7 +45,7 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
     @ExperimentalUnsignedTypes
     fun startMatrixServerRoomListUpdateLoops()
     {
-        this.matrixServerRoomUpdateJob.forEach { server, job ->
+        this.matrixServerRoomUpdateJob.forEach { (_, job) ->
             job.start()
         }
     }
