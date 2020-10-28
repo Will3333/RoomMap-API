@@ -17,7 +17,7 @@ import pro.wsmi.kwsmilib.language.Language
 
 object MatrixRoomsMatrixRoomLanguages : Table(name = "matrix_room_matrix_room_language")
 {
-    val room = reference("room_id", MatrixRooms.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
+    val room = reference("room", MatrixRooms.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
     @ExperimentalSerializationApi
     val language = enumerationByName(name = "language", length = 3, klass = Language::class)
     @ExperimentalSerializationApi

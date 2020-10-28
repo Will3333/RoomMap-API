@@ -15,7 +15,7 @@ import org.jetbrains.exposed.sql.Table
 
 object MatrixRoomsMatrixRoomTags : Table(name = "matrix_room_matrix_room_tag")
 {
-    val room = reference(name ="room_id", MatrixRooms.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
-    val tag = reference(name = "tag_id", MatrixRoomTags.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
+    val room = reference(name ="room", MatrixRooms.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
+    val tag = reference(name = "tag", MatrixRoomTags.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
     override val primaryKey = PrimaryKey(room, tag)
 }

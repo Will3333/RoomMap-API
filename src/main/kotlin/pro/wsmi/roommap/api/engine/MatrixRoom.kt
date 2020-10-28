@@ -104,7 +104,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
         }
 
         @ExperimentalUnsignedTypes
-        suspend fun getAllRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>) : Result<List<MatrixRoom>>
+        fun getAllRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>) : Result<List<MatrixRoom>>
         {
             val baseHttpRequest = getBaseRequest(backendCfg, matrixServer.apiUrl)
 
@@ -135,6 +135,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                 return Result.failure(e)
             }
 
+            // TODO Ne sélectionner que les langues des rooms du serveur en question (jointure)
             val dbAllRoomsLangs = try { transaction(dbConn) {
                 MatrixRoomsMatrixRoomLanguages.selectAll().let { query ->
 
@@ -154,6 +155,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                 return Result.failure(e)
             }
 
+            // TODO Ne sélectionner que les tags des rooms du serveur en question (jointure)
             val dbAllRoomsTags = try { transaction(dbConn) {
                 MatrixRoomsMatrixRoomTags.selectAll().let { query ->
 
