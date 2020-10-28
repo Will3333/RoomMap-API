@@ -17,6 +17,7 @@ import pro.wsmi.kwsmilib.net.URL
 import pro.wsmi.roommap.api.config.BackendConfiguration
 import pro.wsmi.roommap.api.db.MatrixServers
 import java.sql.SQLException
+import java.time.Duration
 
 
 @ExperimentalSerializationApi
@@ -27,14 +28,15 @@ class MatrixServer @ExperimentalUnsignedTypes private constructor (
     val id: UInt,
     val name: String,
     val apiUrl: URL,
-    val updateFreq: ULong,
+    val roomUpdateFreq: ULong,
+    val roomExpirationTime: Duration,
     val disabled: Boolean,
     val tryBeforeDisabling: UInt,
     val rooms: List<MatrixRoom>,
 )
 {
     @ExperimentalUnsignedTypes
-    fun update(name: String = this.name, apiUrl: URL = this.apiUrl, updateFreq: ULong = this.updateFreq, disabled: Boolean = this.disabled, tryBeforeDisabling: UInt = this.tryBeforeDisabling, rooms: List<MatrixRoom> = this.rooms) : Result<MatrixServer>
+    fun update(name: String = this.name, apiUrl: URL = this.apiUrl, roomUpdateFreq: ULong = this.roomUpdateFreq, roomExpirationTime: Duration = this.roomExpirationTime, disabled: Boolean = this.disabled, tryBeforeDisabling: UInt = this.tryBeforeDisabling, rooms: List<MatrixRoom> = this.rooms) : Result<MatrixServer>
     {
         val newServer = MatrixServer(
             backendCfg = this.backendCfg,
@@ -42,19 +44,21 @@ class MatrixServer @ExperimentalUnsignedTypes private constructor (
             id = this.id,
             name = name,
             apiUrl = apiUrl,
-            updateFreq = updateFreq,
+            roomUpdateFreq = roomUpdateFreq,
+            roomExpirationTime = roomExpirationTime,
             disabled = disabled,
             tryBeforeDisabling = tryBeforeDisabling,
             rooms = rooms,
         )
 
-        if (newServer.name != this.name || newServer.apiUrl != this.apiUrl || newServer.updateFreq != this.updateFreq || newServer.disabled != this.disabled) {
+        if (newServer.name != this.name || newServer.apiUrl != this.apiUrl || newServer.roomUpdateFreq != this.roomUpdateFreq || newServer.disabled != this.disabled) {
             try {
                 transaction(this.dbConn) {
                     MatrixServers.update({ MatrixServers.id eq this@MatrixServer.id.toInt() }) {
                         it[MatrixServers.name] = newServer.name
                         it[MatrixServers.apiUrl] = newServer.apiUrl.toString()
-                        it[MatrixServers.updateFrequency] = newServer.updateFreq
+                        it[MatrixServers.roomUpdateFrequency] = newServer.roomUpdateFreq
+                        it[MatrixServers.roomExpirationTime] = newServer.roomExpirationTime.seconds
                         it[MatrixServers.disabled] = newServer.disabled
                     }
                 }
@@ -69,14 +73,15 @@ class MatrixServer @ExperimentalUnsignedTypes private constructor (
     companion object
     {
         @ExperimentalUnsignedTypes
-        fun new(backendCfg: BackendConfiguration, dbConn: Database, name: String, apiUrl: URL, updateFreq: ULong = 3600000u, disabled: Boolean = false, tryBeforeDisabling: UInt = 3u) : Result<MatrixServer>
+        fun new(backendCfg: BackendConfiguration, dbConn: Database, name: String, apiUrl: URL, roomUpdateFreq: ULong = 3600000u, roomExpirationTime: Duration = Duration.ofSeconds(604800L), disabled: Boolean = false, tryBeforeDisabling: UInt = 3u) : Result<MatrixServer>
         {
             val serverId = try {
                 transaction(dbConn) {
                     MatrixServers.insertAndGetId {
                         it[MatrixServers.name] = name
                         it[MatrixServers.apiUrl] = apiUrl.toString()
-                        it[MatrixServers.updateFrequency] = updateFreq
+                        it[MatrixServers.roomUpdateFrequency] = roomUpdateFreq
+                        it[MatrixServers.roomExpirationTime] = roomExpirationTime.seconds
                         it[MatrixServers.disabled] = disabled
                     }
                 }
@@ -84,19 +89,18 @@ class MatrixServer @ExperimentalUnsignedTypes private constructor (
                 return Result.failure(e)
             }
 
-            return Result.success(
-                MatrixServer(
+            return Result.success( MatrixServer (
                 backendCfg = backendCfg,
                 dbConn = dbConn,
                 id = serverId.value.toUInt(),
                 name = name,
                 apiUrl = apiUrl,
-                updateFreq = updateFreq,
+                roomUpdateFreq = roomUpdateFreq,
+                roomExpirationTime = roomExpirationTime,
                 disabled = disabled,
                 tryBeforeDisabling = tryBeforeDisabling,
                 rooms = listOf()
-            )
-            )
+            ))
         }
 
         @ExperimentalUnsignedTypes
@@ -123,7 +127,8 @@ class MatrixServer @ExperimentalUnsignedTypes private constructor (
                                     id = it[MatrixServers.id].value.toUInt(),
                                     name = it[MatrixServers.name],
                                     apiUrl = apiUrl,
-                                    updateFreq = it[MatrixServers.updateFrequency],
+                                    roomUpdateFreq = it[MatrixServers.roomUpdateFrequency],
+                                    roomExpirationTime = Duration.ofSeconds(it[MatrixServers.roomExpirationTime]),
                                     disabled = it[MatrixServers.disabled],
                                     tryBeforeDisabling = 3u,
                                     rooms = listOf()

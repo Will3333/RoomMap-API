@@ -19,6 +19,7 @@ object MatrixRooms : Table(name = "matrix_room")
     val id: Column<String> = varchar(name = "id", length = 512)
     val server = reference("server", MatrixServers.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
     val dateAdded = long(name = "date_added")
+    val updateDate = long(name = "update_date")
     val excluded: Column<Boolean> = bool("excluded").default(defaultValue = false)
     override val primaryKey = PrimaryKey(this.id)
 }

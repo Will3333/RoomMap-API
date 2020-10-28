@@ -146,7 +146,7 @@ fun handleAPIServerListReq(debugMode: Boolean, engine: Engine) : HttpHandler = {
             it.id.toString()
         },
         valueTransform = {
-            MatrixServer(it.name, it.apiUrl, it.updateFreq.toLong())
+            MatrixServer(it.name, it.apiUrl, it.roomUpdateFreq.toLong())
         }
     )
 
@@ -194,7 +194,7 @@ fun handleAPIServerReq(debugMode: Boolean, engine: Engine) : HttpHandler = { req
 
         if (foundServer != null)
         {
-            val apiServerReqResponse = APIServerReqResponse(foundServer.id.toString(), MatrixServer(foundServer.name, foundServer.apiUrl, foundServer.updateFreq.toLong()))
+            val apiServerReqResponse = APIServerReqResponse(foundServer.id.toString(), MatrixServer(foundServer.name, foundServer.apiUrl, foundServer.roomUpdateFreq.toLong()))
 
             val responseBodyStr = try {
                 jsonSerializer.encodeToString(APIServerReqResponse.serializer(), apiServerReqResponse)

@@ -18,6 +18,7 @@ object MatrixServers : IntIdTable(name = "matrix_server")
     val name: Column<String> = varchar(name = "name", 255).uniqueIndex()
     val apiUrl: Column<String> = varchar(name = "api_url", 255).uniqueIndex()
     @ExperimentalUnsignedTypes
-    val updateFrequency: Column<ULong> = ulong(name = "update_frequency").default(defaultValue = 3600000u)
+    val roomUpdateFrequency: Column<ULong> = ulong(name = "room_update_frequency").default(defaultValue = 3600000u)
+    val roomExpirationTime = long(name = "room_expiration_time").default(defaultValue = 604800L)
     val disabled: Column<Boolean> = bool(name = "disabled").default(defaultValue = false)
 }

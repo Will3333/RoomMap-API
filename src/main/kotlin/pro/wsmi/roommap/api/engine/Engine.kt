@@ -39,7 +39,7 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
         GlobalScope.launch(start = CoroutineStart.LAZY) {
 
             println("Appel de la première coroutine de maj des salons du serveur ${server.name}")
-            val newServer = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = server).getOrElse { e ->
+            val newServer = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, debugMode = this@Engine.debugMode, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = server).getOrElse { e ->
                 //TODO add error logger
                 if (debugMode)
                     e.printStackTrace()
@@ -57,7 +57,6 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
     {
         this.matrixServerRoomUpdateJobs.forEach { (_, job) ->
             GlobalScope.launch {
-                delay(2000L)
                 job.start()
             }
         }
@@ -85,11 +84,11 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
                 GlobalScope.launch(start = newCoroutineStartType) {
 
                     if (newCoroutineStartType == CoroutineStart.DEFAULT)
-                        delay(newServer.updateFreq.toLong())
+                        delay(newServer.roomUpdateFreq.toLong())
 
                     println("Appel d'une coroutine de maj des salons du serveur ${newServer.name}")
 
-                    val newServer2 = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = newServer).getOrElse { e ->
+                    val newServer2 = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, debugMode = this@Engine.debugMode, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = newServer).getOrElse { e ->
                         //TODO add error logger
                         if (this@Engine.debugMode)
                             e.printStackTrace()
@@ -175,10 +174,11 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
             return Result.success(Engine(backendCfg = backendCfg, debugMode = debugMode, dbConn = dbConn, matrixRoomTags = tags, matrixServers = matrixServersWithoutRooms))
         }
 
-        private fun updateMatrixServerRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServer: MatrixServer) : Result<MatrixServer>
+        private fun updateMatrixServerRooms(backendCfg: BackendConfiguration, debugMode: Boolean, dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServer: MatrixServer) : Result<MatrixServer>
         {
-            val roomsResult = MatrixRoom.getAllRooms(
+            val roomsResult = MatrixRoom.getAllRoomsAndUpdateDb(
                 backendCfg = backendCfg,
+                debugMode = debugMode,
                 dbConn = dbConn,
                 matrixServer = matrixServer,
                 matrixRoomTags = matrixRoomTags

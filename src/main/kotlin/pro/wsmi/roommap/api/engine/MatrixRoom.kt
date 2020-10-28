@@ -17,6 +17,7 @@ import org.http4k.client.ApacheClient
 import org.http4k.core.Status
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import pro.wsmi.kwsmilib.language.Language
 import pro.wsmi.roommap.api.config.BackendConfiguration
@@ -42,6 +43,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
     val guestCanJoin: Boolean,
     val avatarUrl: String?,
     val dateAdded: Date,
+    val updateDate: Date,
     val excluded: Boolean,
     val languages: List<Language>?,
     val tags: Set<MatrixRoomTag>?
@@ -59,6 +61,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
         @ExperimentalUnsignedTypes
         fun new(dbConn: Database, matrixServer: MatrixServer, matrixServerRoomChunk: PublicRoomsChunk, excluded: Boolean = false, languages: List<Language>? = null, tags: Set<MatrixRoomTag>? = null) : Result<MatrixRoom>
         {
+            val dateAdded = Date()
             val newTag = MatrixRoom(
                 id = matrixServerRoomChunk.roomId,
                 aliases = matrixServerRoomChunk.aliases?.toSet(),
@@ -69,7 +72,8 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                 worldReadable = matrixServerRoomChunk.worldReadable,
                 guestCanJoin = matrixServerRoomChunk.guestCanJoin,
                 avatarUrl = matrixServerRoomChunk.avatarUrl,
-                dateAdded = Date(),
+                dateAdded = dateAdded,
+                updateDate = dateAdded,
                 excluded = excluded,
                 languages = languages,
                 tags = tags
@@ -81,6 +85,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                         it[MatrixRooms.id] = newTag.id
                         it[MatrixRooms.server] = matrixServer.id.toInt()
                         it[MatrixRooms.dateAdded] = newTag.dateAdded.time
+                        it[MatrixRooms.updateDate] = newTag.updateDate.time
                         it[MatrixRooms.excluded] = newTag.excluded
                     }
                     newTag.languages?.forEach { lang ->
@@ -104,7 +109,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
         }
 
         @ExperimentalUnsignedTypes
-        fun getAllRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>) : Result<List<MatrixRoom>>
+        fun getAllRoomsAndUpdateDb(backendCfg: BackendConfiguration, debugMode: Boolean, dbConn: Database, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>) : Result<List<MatrixRoom>>
         {
             val baseHttpRequest = getBaseRequest(backendCfg, matrixServer.apiUrl)
 
@@ -128,13 +133,13 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                         it[MatrixRooms.id]
                     },
                     valueTransform = {
-                        DbRoomData(dateAdded = Date(it[MatrixRooms.dateAdded]), excluded = it[MatrixRooms.excluded])
+                        DbRoomData (dateAdded = Date(it[MatrixRooms.dateAdded]), excluded = it[MatrixRooms.excluded])
                     }
                 )
             } } catch (e: SQLException) {
                 return Result.failure(e)
             }
-            
+
             val dbAllRoomsLangs = try { transaction(dbConn) {
                 Join(
                     table = MatrixRoomsMatrixRoomLanguages, otherTable = MatrixRooms,
@@ -186,15 +191,18 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
             }
 
 
-            val newRoomList = publicRoomListReq200Response.chunk.map { roomChunk ->
+            val existingRoomsList = mutableListOf<MatrixRoom>()
+            val newRoomsList = mutableListOf<MatrixRoom>()
+            val roomsList = publicRoomListReq200Response.chunk.map { roomChunk ->
 
                 val dbRoom = dbRooms[roomChunk.roomId]
-                val dbRoomLangs = dbAllRoomsLangs[roomChunk.roomId]?.toList()
-                val dbRoomTags = dbAllRoomsTags[roomChunk.roomId]?.toSet()
 
                 if (dbRoom != null)
                 {
-                    MatrixRoom (
+                    val dbRoomLangs = dbAllRoomsLangs[roomChunk.roomId]?.toList()
+                    val dbRoomTags = dbAllRoomsTags[roomChunk.roomId]?.toSet()
+
+                    val room = MatrixRoom (
                         id = roomChunk.roomId,
                         aliases = roomChunk.aliases?.toSet(),
                         canonicalAlias = roomChunk.canonicalAlias,
@@ -205,20 +213,80 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                         guestCanJoin = roomChunk.guestCanJoin,
                         avatarUrl = roomChunk.avatarUrl,
                         dateAdded = dbRoom.dateAdded,
+                        updateDate = Date(),
                         excluded = dbRoom.excluded,
                         languages = if (dbRoomLangs != null && dbRoomLangs.isNotEmpty()) dbRoomLangs else null,
                         tags = if (dbRoomTags != null && dbRoomTags.isNotEmpty()) dbRoomTags else null
                     )
+
+                    existingRoomsList.add(room)
+
+                    room
                 }
                 else
-                    new(dbConn, matrixServer, roomChunk).getOrElse { e ->
-                        return Result.failure(e)
-                    }
+                {
+                    val dateAdded = Date()
+                    val room = MatrixRoom (
+                        id = roomChunk.roomId,
+                        aliases = roomChunk.aliases?.toSet(),
+                        canonicalAlias = roomChunk.canonicalAlias,
+                        name = roomChunk.name?.filterName(),
+                        numJoinedMembers = roomChunk.numJoinedMembers.toUInt(),
+                        topic = roomChunk.topic?.filterTopic(),
+                        worldReadable = roomChunk.worldReadable,
+                        guestCanJoin = roomChunk.guestCanJoin,
+                        avatarUrl = roomChunk.avatarUrl,
+                        dateAdded = dateAdded,
+                        updateDate = dateAdded,
+                        excluded = false,
+                        languages = null,
+                        tags = null
+                    )
+
+                    newRoomsList.add(room)
+
+                    room
+                }
             }
 
-            println("test")
+            if (existingRoomsList.isNotEmpty())
+                try { transaction(dbConn) {
 
-            return Result.success(newRoomList)
+                    val conn = TransactionManager.current().connection
+                    conn.executeInBatch(
+                        existingRoomsList.map { room ->
+                            "UPDATE ${MatrixRooms.tableName} SET ${MatrixRooms.updateDate.name} = ${room.updateDate.time} WHERE ${MatrixRooms.id.name} = '${room.id}'"
+                        }
+                    )
+
+                } } catch (e: SQLException) {
+                    return Result.failure(e)
+                }
+
+            if (newRoomsList.isNotEmpty())
+                try {transaction(dbConn) {
+                    MatrixRooms.batchInsert(newRoomsList) { room ->
+                        this[MatrixRooms.id] = room.id
+                        this[MatrixRooms.server] = matrixServer.id.toInt()
+                        this[MatrixRooms.dateAdded] = room.dateAdded.time
+                        this[MatrixRooms.updateDate] = room.updateDate.time
+                        this[MatrixRooms.excluded] = room.excluded
+                    }
+                } } catch (e: SQLException) {
+                    return Result.failure(e)
+                }
+
+            try { transaction(dbConn) {
+                MatrixRooms.deleteWhere { MatrixRooms.server eq matrixServer.id.toInt() and (MatrixRooms.updateDate less Date().time-matrixServer.roomExpirationTime.toMillis()) }
+            } } catch (e: SQLException) {
+                if (debugMode)
+                    e.printStackTrace()
+                //TODO add error logger
+            }
+
+            println("fin update room du serveur ${matrixServer.name}")
+
+            return Result.success(roomsList)
         }
     }
 }
