@@ -36,6 +36,7 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
     private var matrixServerRoomUpdateJob = this.matrixServers.associateWith { server ->
 
         GlobalScope.launch(start = CoroutineStart.LAZY) {
+
             println("Appel de la première coroutine de maj des salons du serveur ${server.name}")
             val newServer = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = server).getOrElse { e ->
                 //TODO add error logger
@@ -54,7 +55,10 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
     fun startMatrixServerRoomListUpdateLoops()
     {
         this.matrixServerRoomUpdateJob.forEach { (_, job) ->
-            job.start()
+            GlobalScope.launch {
+                delay(2000L)
+                job.start()
+            }
         }
     }
 
@@ -74,15 +78,13 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
         {
             val oldJob = this.matrixServerRoomUpdateJob[oldServer]
             val newCoroutineStartType = if(oldJob != null && (oldJob.isActive || oldJob.isCompleted || oldJob.isCancelled)) CoroutineStart.DEFAULT else CoroutineStart.LAZY
-            println("Nombre d'essai restant pour le nouveau objet du serveur ${newServer.name} : ${newServer.tryBeforeDisabling}")
-            println("Création d'une nouvelle coroutine de type ${newCoroutineStartType.name} pour le serveur ${newServer.name}")
 
             GlobalScope.launch(start = newCoroutineStartType) {
 
-                println("Appel d'une coroutine de maj des salons du serveur ${newServer.name}")
-
                 if (newCoroutineStartType == CoroutineStart.DEFAULT)
                     delay(newServer.updateFreq.toLong())
+
+                println("Appel d'une coroutine de maj des salons du serveur ${newServer.name}")
 
                 val newServer2 = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = newServer).getOrElse { e ->
                     //TODO add error logger
@@ -93,6 +95,8 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
 
                 if (newServer2 != null)
                     this@Engine.updateMatrixServerList(oldServer = newServer, newServer = newServer2)
+
+                println(this@Engine.matrixServerRoomUpdateJob)
             }
         }
         else null
@@ -171,16 +175,18 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
 
         private fun updateMatrixServerRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServer: MatrixServer) : Result<MatrixServer>
         {
-            val rooms = MatrixRoom.getAllRooms(
+            val roomsResult = MatrixRoom.getAllRooms(
                 backendCfg = backendCfg,
                 dbConn = dbConn,
                 matrixServer = matrixServer,
                 matrixRoomTags = matrixRoomTags
-            ).getOrElse { e ->
-                return Result.failure(e)
-            }
+            )
+            val rooms = roomsResult.getOrElse { matrixServer.rooms }
 
-            val newServerTryBeforeDisabling = if (matrixServer.tryBeforeDisabling > 0u) matrixServer.tryBeforeDisabling-1u else matrixServer.tryBeforeDisabling
+            val newServerTryBeforeDisabling =  if (roomsResult.isFailure)
+                if (matrixServer.tryBeforeDisabling > 0u) matrixServer.tryBeforeDisabling-1u else matrixServer.tryBeforeDisabling
+            else
+                3u
             val newServerDisabled = if (newServerTryBeforeDisabling > 0u) matrixServer.disabled else true
 
             val newServer = matrixServer.update(
@@ -191,7 +197,10 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
                 return Result.failure(e)
             }
 
-            return Result.success(newServer)
+            return if (roomsResult.isSuccess)
+                Result.success(newServer)
+            else
+                Result.failure(roomsResult.exceptionOrNull()!!)
         }
     }
 }

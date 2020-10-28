@@ -46,6 +46,8 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
     val tags: Set<MatrixRoomTag>?
 )
 {
+    private data class DbRoomData(val excluded: Boolean)
+
     companion object
     {
         private fun String.filterName() : String = this
@@ -116,49 +118,69 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                 return Result.failure(e)
             }
 
-            val roomsSQLReqResult = try {
-                transaction(dbConn) {
-                    MatrixRooms.select(where = MatrixRooms.server eq matrixServer.id.toInt()).associateBy {
+
+            val dbRooms = try { transaction(dbConn) {
+                MatrixRooms.select(where = MatrixRooms.server eq matrixServer.id.toInt()).associateBy(
+                    keySelector = {
                         it[MatrixRooms.id]
+                    },
+                    valueTransform = {
+                        DbRoomData(excluded = it[MatrixRooms.excluded])
                     }
-                }
-            } catch (e: SQLException) {
+                )
+            } } catch (e: SQLException) {
                 return Result.failure(e)
             }
 
-            return Result.success(publicRoomListReq200Response.chunk.map { roomChunk ->
+            val dbAllRoomsLangs = try { transaction(dbConn) {
+                MatrixRoomsMatrixRoomLanguages.selectAll().let { query ->
 
-                val roomSQLReqResult = roomsSQLReqResult[roomChunk.roomId]
+                    val langs = mutableMapOf<String, MutableList<Language>>()
+                    query.forEach {
+                        val roomId = it[MatrixRoomsMatrixRoomLanguages.room]
+                        val roomLang = Language.valueOf(it[MatrixRoomsMatrixRoomLanguages.language])
 
-                if (roomSQLReqResult != null)
+                        if (langs.containsKey(roomId))
+                            langs[roomId]!!.add(roomLang)
+                        else
+                            langs[roomId] = mutableListOf(roomLang)
+                    }
+                    langs.toMap()
+                }
+            } } catch (e: SQLException) {
+                return Result.failure(e)
+            }
+
+            val dbAllRoomsTags = try { transaction(dbConn) {
+                MatrixRoomsMatrixRoomTags.selectAll().let { query ->
+
+                    val tags = mutableMapOf<String, MutableSet<MatrixRoomTag>>()
+                    query.forEach {
+                        val roomId = it[MatrixRoomsMatrixRoomTags.room]
+                        val roomTag = matrixRoomTags[it[MatrixRoomsMatrixRoomTags.tag]]
+
+                        if (roomTag != null) {
+                            if (tags.containsKey(roomId))
+                                tags[roomId]!!.add(roomTag)
+                            else
+                                tags[roomId] = mutableSetOf(roomTag)
+                        }
+                    }
+                    tags.toMap()
+                }
+            } } catch (e: SQLException) {
+                return Result.failure(e)
+            }
+
+
+            val newRoomList = publicRoomListReq200Response.chunk.map { roomChunk ->
+
+                val dbRoom = dbRooms[roomChunk.roomId]
+                val dbRoomLangs = dbAllRoomsLangs[roomChunk.roomId]?.toList()
+                val dbRoomTags = dbAllRoomsTags[roomChunk.roomId]?.toSet()
+
+                if (dbRoom != null)
                 {
-                    val roomLangs = try {
-                        transaction(dbConn) {
-                            MatrixRoomsMatrixRoomLanguages
-                                .slice(MatrixRoomsMatrixRoomLanguages.language)
-                                .select(where = MatrixRoomsMatrixRoomLanguages.room eq roomChunk.roomId).mapNotNull {
-                                    Language.valueOf(it[MatrixRoomsMatrixRoomLanguages.language])
-                                }
-                        }
-                    } catch (e: SQLException) {
-                        return Result.failure(e)
-                    }
-
-                    val roomTags = try {
-                        transaction(dbConn) {
-                            Join(
-                                table = MatrixRoomsMatrixRoomTags, otherTable = MatrixRoomTags,
-                                onColumn = MatrixRoomsMatrixRoomTags.tag, otherColumn = MatrixRoomTags.id,
-                                joinType = JoinType.INNER,
-                                additionalConstraint = { MatrixRoomsMatrixRoomTags.room eq roomChunk.roomId }
-                            ).slice(MatrixRoomsMatrixRoomTags.tag).selectAll().mapNotNull {
-                                matrixRoomTags[it[MatrixRoomsMatrixRoomTags.tag]]
-                            }.toSet()
-                        }
-                    } catch (e: SQLException) {
-                        return Result.failure(e)
-                    }
-
                     MatrixRoom (
                         id = roomChunk.roomId,
                         aliases = roomChunk.aliases?.toSet(),
@@ -169,18 +191,20 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                         worldReadable = roomChunk.worldReadable,
                         guestCanJoin = roomChunk.guestCanJoin,
                         avatarUrl = roomChunk.avatarUrl,
-                        excluded = roomSQLReqResult[MatrixRooms.excluded],
-                        languages = if (roomLangs.isNotEmpty()) roomLangs else null,
-                        tags = if (roomTags.isNotEmpty()) roomTags else null
+                        excluded = dbRoom.excluded,
+                        languages = if (dbRoomLangs != null && dbRoomLangs.isNotEmpty()) dbRoomLangs else null,
+                        tags = if (dbRoomTags != null && dbRoomTags.isNotEmpty()) dbRoomTags else null
                     )
                 }
                 else
-                    new(dbConn, matrixServer, roomChunk).let {
-                        it.getOrElse { e ->
-                            return Result.failure(e)
-                        }
+                    new(dbConn, matrixServer, roomChunk).getOrElse { e ->
+                        return Result.failure(e)
                     }
-            })
+            }
+
+            println("test")
+
+            return Result.success(newRoomList)
         }
     }
 }
