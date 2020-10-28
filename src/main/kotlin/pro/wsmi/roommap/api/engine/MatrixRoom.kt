@@ -20,7 +20,6 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import pro.wsmi.kwsmilib.language.Language
 import pro.wsmi.roommap.api.config.BackendConfiguration
-import pro.wsmi.roommap.api.db.MatrixRoomTags
 import pro.wsmi.roommap.api.db.MatrixRooms
 import pro.wsmi.roommap.api.db.MatrixRoomsMatrixRoomLanguages
 import pro.wsmi.roommap.api.db.MatrixRoomsMatrixRoomTags
@@ -29,6 +28,7 @@ import pro.wsmi.roommap.api.matrix.api.MATRIX_API_PUBLIC_ROOMS_PATH
 import pro.wsmi.roommap.api.matrix.api.PublicRoomListReq200Response
 import pro.wsmi.roommap.api.matrix.api.PublicRoomsChunk
 import java.sql.SQLException
+import java.util.*
 
 @ExperimentalSerializationApi
 class MatrixRoom @ExperimentalUnsignedTypes private constructor (
@@ -41,12 +41,13 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
     val worldReadable: Boolean,
     val guestCanJoin: Boolean,
     val avatarUrl: String?,
+    val dateAdded: Date,
     val excluded: Boolean,
     val languages: List<Language>?,
     val tags: Set<MatrixRoomTag>?
 )
 {
-    private data class DbRoomData(val excluded: Boolean)
+    private data class DbRoomData(val dateAdded: Date, val excluded: Boolean)
 
     companion object
     {
@@ -68,6 +69,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                 worldReadable = matrixServerRoomChunk.worldReadable,
                 guestCanJoin = matrixServerRoomChunk.guestCanJoin,
                 avatarUrl = matrixServerRoomChunk.avatarUrl,
+                dateAdded = Date(),
                 excluded = excluded,
                 languages = languages,
                 tags = tags
@@ -78,6 +80,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                     MatrixRooms.insert {
                         it[MatrixRooms.id] = newTag.id
                         it[MatrixRooms.server] = matrixServer.id.toInt()
+                        it[MatrixRooms.dateAdded] = newTag.dateAdded.time
                         it[MatrixRooms.excluded] = newTag.excluded
                     }
                     newTag.languages?.forEach { lang ->
@@ -101,7 +104,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
         }
 
         @ExperimentalUnsignedTypes
-        fun getAllRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>) : Result<List<MatrixRoom>>
+        suspend fun getAllRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixServer: MatrixServer, matrixRoomTags: Map<String, MatrixRoomTag>) : Result<List<MatrixRoom>>
         {
             val baseHttpRequest = getBaseRequest(backendCfg, matrixServer.apiUrl)
 
@@ -125,7 +128,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                         it[MatrixRooms.id]
                     },
                     valueTransform = {
-                        DbRoomData(excluded = it[MatrixRooms.excluded])
+                        DbRoomData(dateAdded = Date(it[MatrixRooms.dateAdded]), excluded = it[MatrixRooms.excluded])
                     }
                 )
             } } catch (e: SQLException) {
@@ -191,6 +194,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                         worldReadable = roomChunk.worldReadable,
                         guestCanJoin = roomChunk.guestCanJoin,
                         avatarUrl = roomChunk.avatarUrl,
+                        dateAdded = dbRoom.dateAdded,
                         excluded = dbRoom.excluded,
                         languages = if (dbRoomLangs != null && dbRoomLangs.isNotEmpty()) dbRoomLangs else null,
                         tags = if (dbRoomTags != null && dbRoomTags.isNotEmpty()) dbRoomTags else null

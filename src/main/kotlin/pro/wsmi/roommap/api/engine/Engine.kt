@@ -65,6 +65,7 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
 
     private fun updateMatrixServerList(oldServer: MatrixServer, newServer: MatrixServer)
     {
+        //TODO Sécuriser les deux collections (servers et jobs) avec un verrou
         this.matrixServers = this.matrixServers.toMutableList().let { newServerList ->
             newServerList.remove(oldServer)
             newServerList.add(newServer)
@@ -95,8 +96,6 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
 
                 if (newServer2 != null)
                     this@Engine.updateMatrixServerList(oldServer = newServer, newServer = newServer2)
-
-                println(this@Engine.matrixServerRoomUpdateJob)
             }
         }
         else null
@@ -173,7 +172,7 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
             return Result.success(Engine(backendCfg = backendCfg, debugMode = debugMode, dbConn = dbConn, matrixRoomTags = tags, matrixServers = matrixServersWithoutRooms))
         }
 
-        private fun updateMatrixServerRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServer: MatrixServer) : Result<MatrixServer>
+        private suspend fun updateMatrixServerRooms(backendCfg: BackendConfiguration, dbConn: Database, matrixRoomTags: Map<String, MatrixRoomTag>, matrixServer: MatrixServer) : Result<MatrixServer>
         {
             val roomsResult = MatrixRoom.getAllRooms(
                 backendCfg = backendCfg,
