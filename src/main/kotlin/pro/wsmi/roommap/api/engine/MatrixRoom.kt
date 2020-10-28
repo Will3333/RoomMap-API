@@ -158,7 +158,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
             } } catch (e: SQLException) {
                 return Result.failure(e)
             }
-
+            
             val dbAllRoomsTags = try { transaction(dbConn) {
                 Join(
                     table = MatrixRoomsMatrixRoomTags, otherTable = MatrixRooms,
