@@ -86,7 +86,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                     newTag.languages?.forEach { lang ->
                         MatrixRoomsMatrixRoomLanguages.insert {
                             it[MatrixRoomsMatrixRoomLanguages.room] = newTag.id
-                            it[MatrixRoomsMatrixRoomLanguages.language] = lang.name
+                            it[MatrixRoomsMatrixRoomLanguages.language] = lang
                         }
                     }
                     newTag.tags?.forEach {tag ->
@@ -141,7 +141,7 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                     val langs = mutableMapOf<String, MutableList<Language>>()
                     query.forEach {
                         val roomId = it[MatrixRoomsMatrixRoomLanguages.room]
-                        val roomLang = Language.valueOf(it[MatrixRoomsMatrixRoomLanguages.language])
+                        val roomLang = it[MatrixRoomsMatrixRoomLanguages.language]
 
                         if (langs.containsKey(roomId))
                             langs[roomId]!!.add(roomLang)

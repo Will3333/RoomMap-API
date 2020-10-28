@@ -10,13 +10,16 @@
 
 package pro.wsmi.roommap.api.db
 
-import org.jetbrains.exposed.sql.Column
+import kotlinx.serialization.ExperimentalSerializationApi
 import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.Table
+import pro.wsmi.kwsmilib.language.Language
 
 object MatrixRoomsMatrixRoomLanguages : Table(name = "matrix_room_matrix_room_language")
 {
     val room = reference("room_id", MatrixRooms.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.CASCADE)
-    val language: Column<String> = varchar(name = "language", length = 3)
+    @ExperimentalSerializationApi
+    val language = enumerationByName(name = "language", length = 3, klass = Language::class)
+    @ExperimentalSerializationApi
     override val primaryKey = PrimaryKey(room, language)
 }
