@@ -134,10 +134,14 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
             } } catch (e: SQLException) {
                 return Result.failure(e)
             }
-
-            // TODO Ne sélectionner que les langues des rooms du serveur en question (jointure)
+            
             val dbAllRoomsLangs = try { transaction(dbConn) {
-                MatrixRoomsMatrixRoomLanguages.selectAll().let { query ->
+                Join(
+                    table = MatrixRoomsMatrixRoomLanguages, otherTable = MatrixRooms,
+                    onColumn = MatrixRoomsMatrixRoomLanguages.room, otherColumn = MatrixRooms.id,
+                    joinType = JoinType.INNER,
+                    additionalConstraint = { MatrixRooms.server eq matrixServer.id.toInt() }
+                ).selectAll().let { query ->
 
                     val langs = mutableMapOf<String, MutableList<Language>>()
                     query.forEach {
@@ -155,9 +159,13 @@ class MatrixRoom @ExperimentalUnsignedTypes private constructor (
                 return Result.failure(e)
             }
 
-            // TODO Ne sélectionner que les tags des rooms du serveur en question (jointure)
             val dbAllRoomsTags = try { transaction(dbConn) {
-                MatrixRoomsMatrixRoomTags.selectAll().let { query ->
+                Join(
+                    table = MatrixRoomsMatrixRoomTags, otherTable = MatrixRooms,
+                    onColumn = MatrixRoomsMatrixRoomTags.room, otherColumn = MatrixRooms.id,
+                    joinType = JoinType.INNER,
+                    additionalConstraint = { MatrixRooms.server eq matrixServer.id.toInt() }
+                ).selectAll().let { query ->
 
                     val tags = mutableMapOf<String, MutableSet<MatrixRoomTag>>()
                     query.forEach {
