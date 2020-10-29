@@ -8,5 +8,5 @@ database_configuration:
     username: roommap
     password: YzgONYqaMcQdtYl9eqrx
 api_http_server:
-  port: 80
+  port: 9999
   compression: "true"

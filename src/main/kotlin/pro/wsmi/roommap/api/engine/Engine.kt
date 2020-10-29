@@ -35,79 +35,58 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
     var matrixServers: List<MatrixServer> = matrixServers
         private set
     private var matrixServerRoomUpdateJobs = this.matrixServers.associateWith { server ->
-
-        GlobalScope.launch(start = CoroutineStart.LAZY) {
-
-            println("Appel de la première coroutine de maj des salons du serveur ${server.name}")
-            val newServer = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, debugMode = this@Engine.debugMode, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = server).getOrElse { e ->
-                //TODO add error logger
-                if (debugMode)
-                    e.printStackTrace()
-                null
-            }
-
-            if (newServer != null)
-                this@Engine.updateMatrixServerList(oldServer = server, newServer = newServer)
-        }
+        newMatrixServerRoomUpdateJob(matrixServer = server)
     }
 
+    private fun newMatrixServerRoomUpdateJob(matrixServer: MatrixServer) : Job = GlobalScope.launch(start = CoroutineStart.LAZY) {
+
+        println("Appel d'une coroutine de mise à jour des salons du serveur ${matrixServer.name}")
+
+        val newServer = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, debugMode = this@Engine.debugMode, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = matrixServer).getOrElse { e ->
+            //TODO add error logger
+            if (debugMode)
+                e.printStackTrace()
+            null
+        }
+
+        if (newServer != null)
+        {
+            val newJob = if (!newServer.disabled) newMatrixServerRoomUpdateJob(matrixServer = newServer) else null
+            this@Engine.matrixServersMutex.withLock {
+
+                this@Engine.matrixServers = this@Engine.matrixServers.toMutableList().let { newServerList ->
+                    newServerList.remove(matrixServer)
+                    newServerList.add(newServer)
+                    newServerList.sortedBy {
+                        it.name
+                    }
+                    newServerList.toList()
+                }
+
+                if (newJob != null)
+                {
+                    this@Engine.matrixServerRoomUpdateJobs = this@Engine.matrixServerRoomUpdateJobs.toMutableMap().let { newJobList ->
+                        newJobList.remove(matrixServer)
+                        newJobList[newServer] = newJob
+                        newJobList.toMap()
+                    }
+                }
+            }
+
+            delay(newServer.roomUpdateFreq.toLong())
+
+            newJob?.start()
+        }
+    }
 
     @ExperimentalUnsignedTypes
     fun startMatrixServerRoomListUpdateLoops()
     {
         this.matrixServerRoomUpdateJobs.forEach { (_, job) ->
-            GlobalScope.launch {
-                job.start()
-            }
+            job.start()
         }
     }
 
-
-    private suspend fun updateMatrixServerList(oldServer: MatrixServer, newServer: MatrixServer)
-    {
-        this.matrixServersMutex.withLock {
-
-            this.matrixServers = this.matrixServers.toMutableList().let { newServerList ->
-                newServerList.remove(oldServer)
-                newServerList.add(newServer)
-                newServerList.sortedBy {
-                    it.name
-                }
-                newServerList.toList()
-            }
-
-            val newJob = if (!newServer.disabled)
-            {
-                val oldJob = this.matrixServerRoomUpdateJobs[oldServer]
-                val newCoroutineStartType = if(oldJob != null && (oldJob.isActive || oldJob.isCompleted || oldJob.isCancelled)) CoroutineStart.DEFAULT else CoroutineStart.LAZY
-
-                GlobalScope.launch(start = newCoroutineStartType) {
-
-                    if (newCoroutineStartType == CoroutineStart.DEFAULT)
-                        delay(newServer.roomUpdateFreq.toLong())
-
-                    println("Appel d'une coroutine de maj des salons du serveur ${newServer.name}")
-
-                    val newServer2 = updateMatrixServerRooms(backendCfg = this@Engine.backendCfg, debugMode = this@Engine.debugMode, dbConn = this@Engine.dbConn, matrixRoomTags = this@Engine.matrixRoomTags, matrixServer = newServer).getOrElse { e ->
-                        //TODO add error logger
-                        if (this@Engine.debugMode)
-                            e.printStackTrace()
-                        null
-                    }
-
-                    if (newServer2 != null)
-                        this@Engine.updateMatrixServerList(oldServer = newServer, newServer = newServer2)
-                }
-            }
-            else null
-
-            this.matrixServerRoomUpdateJobs = this.matrixServerRoomUpdateJobs.toMutableMap().let { newJobList ->
-                newJobList.remove(oldServer)
-                if (newJob != null) newJobList[newServer] = newJob
-                newJobList.toMap()
-            }
-        }
-    }
 
     companion object
     {
