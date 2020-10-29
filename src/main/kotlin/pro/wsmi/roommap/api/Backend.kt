@@ -27,9 +27,9 @@ import org.http4k.routing.routes
 import org.http4k.server.Jetty
 import org.http4k.server.asServer
 import pro.wsmi.roommap.api.engine.Engine
-import pro.wsmi.roommap.lib.api.APIRoomListReq
-import pro.wsmi.roommap.lib.api.APIServerListReq
-import pro.wsmi.roommap.lib.api.APIServerReq
+import pro.wsmi.roommap.lib.api.PublicAPIMatrixRoomListReq
+import pro.wsmi.roommap.lib.api.PublicAPIMatrixServerListReq
+import pro.wsmi.roommap.lib.api.PublicAPIMatrixServerReq
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -113,9 +113,9 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
         engine.startMatrixServerRoomListUpdateLoops()
 
         configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
-            APIRoomListReq.REQ_PATH bind Method.POST to handleAPIRoomListReq(debugModeCLA, engine),
-            APIServerListReq.REQ_PATH bind Method.GET to handleAPIServerListReq(debugModeCLA, engine),
-            APIServerReq.REQ_PATH bind Method.POST to handleAPIServerReq(debugModeCLA, engine)
+            PublicAPIMatrixRoomListReq.REQ_PATH bind Method.POST to handlePublicAPIMatrixRoomListReq(debugModeCLA, engine),
+            PublicAPIMatrixServerListReq.REQ_PATH bind Method.GET to handlePublicAPIMatrixServerListReq(debugModeCLA, engine),
+            PublicAPIMatrixServerReq.REQ_PATH bind Method.POST to handlePublicAPIMatrixServerReq(debugModeCLA, engine)
         )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }

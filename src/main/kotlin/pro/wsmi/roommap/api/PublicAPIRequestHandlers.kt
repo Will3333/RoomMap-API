@@ -19,11 +19,10 @@ import org.http4k.core.Response
 import org.http4k.core.Status
 import pro.wsmi.roommap.api.engine.Engine
 import pro.wsmi.roommap.lib.api.*
-import pro.wsmi.roommap.lib.api.MatrixRoom
 
 @ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
-fun handleAPIRoomListReq(debugMode: Boolean, engine: Engine) : HttpHandler = { req: Request ->
+fun handlePublicAPIMatrixRoomListReq(debugMode: Boolean, engine: Engine) : HttpHandler = { req: Request ->
 
     val frozenMatrixServerList = engine.matrixServers.toList()
 
@@ -32,19 +31,33 @@ fun handleAPIRoomListReq(debugMode: Boolean, engine: Engine) : HttpHandler = { r
     }
 
     val roomListReq = try {
-        jsonSerializer.decodeFromString(APIRoomListReq.serializer(), req.bodyString())
+        jsonSerializer.decodeFromString(PublicAPIMatrixRoomListReq.serializer(), req.bodyString())
     } catch (e: SerializationException) {
         null
     }
 
     if (roomListReq != null)
     {
-        val apiRoomList = mutableListOf<MatrixRoom>()
+        val apiRoomList = mutableListOf<PublicAPIMatrixRoom>()
         frozenMatrixServerList.forEach { server ->
             apiRoomList.addAll(
-                    server.rooms.map {room ->
-                        MatrixRoom(room.id, server.id.toString(), room.aliases, room.canonicalAlias, room.name, room.numJoinedMembers.toInt(), room.topic, room.worldReadable, room.guestCanJoin, room.avatarUrl)
-                    }
+                server.rooms.map { room ->
+                    PublicAPIMatrixRoom (
+                        roomId = room.id,
+                        serverId = server.id.toString(),
+                        aliases = room.aliases, room.canonicalAlias,
+                        name = room.name,
+                        numJoinedMembers = room.numJoinedMembers.toInt(),
+                        topic = room.topic,
+                        worldReadable = room.worldReadable,
+                        guestCanJoin = room.guestCanJoin,
+                        avatarUrl = room.avatarUrl,
+                        languages = room.languages,
+                        tagIds = room.tags?.map { tag ->
+                            tag.id
+                        }?.toSet()
+                    )
+                }
             )
         }
 
@@ -112,10 +125,10 @@ fun handleAPIRoomListReq(debugMode: Boolean, engine: Engine) : HttpHandler = { r
 
         if (slicedAPIRoomList.isNotEmpty())
         {
-            val apiRoomListReqResponse = APIRoomListReqResponse(slicedAPIRoomList.toList(), roomsTotalNum)
+            val roomListReqResponse = PublicAPIMatrixRoomListReqResponse(slicedAPIRoomList.toList(), roomsTotalNum)
 
             val responseBodyStr = try {
-                jsonSerializer.encodeToString(APIRoomListReqResponse.serializer(), apiRoomListReqResponse)
+                jsonSerializer.encodeToString(PublicAPIMatrixRoomListReqResponse.serializer(), roomListReqResponse)
             } catch (e: SerializationException) {
                 null
             }
@@ -133,7 +146,7 @@ fun handleAPIRoomListReq(debugMode: Boolean, engine: Engine) : HttpHandler = { r
 
 @ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
-fun handleAPIServerListReq(debugMode: Boolean, engine: Engine) : HttpHandler = {
+fun handlePublicAPIMatrixServerListReq(debugMode: Boolean, engine: Engine) : HttpHandler = {
 
     val frozenMatrixServerList = engine.matrixServers.toList()
 
@@ -146,14 +159,14 @@ fun handleAPIServerListReq(debugMode: Boolean, engine: Engine) : HttpHandler = {
             it.id.toString()
         },
         valueTransform = {
-            MatrixServer(it.name, it.apiUrl, it.roomUpdateFreq.toLong())
+            PublicAPIMatrixServer(it.name, it.apiUrl, it.roomUpdateFreq.toLong())
         }
     )
 
-    val apiServerListReqResponse = APIServerListReqResponse(serverList)
+    val apiServerListReqResponse = PublicAPIMatrixServerListReqResponse(serverList)
 
     val responseBodyStr = try {
-        jsonSerializer.encodeToString(APIServerListReqResponse.serializer(), apiServerListReqResponse)
+        jsonSerializer.encodeToString(PublicAPIMatrixServerListReqResponse.serializer(), apiServerListReqResponse)
     } catch (e : SerializationException) {
         null
     }
@@ -166,7 +179,7 @@ fun handleAPIServerListReq(debugMode: Boolean, engine: Engine) : HttpHandler = {
 
 @ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
-fun handleAPIServerReq(debugMode: Boolean, engine: Engine) : HttpHandler = { req ->
+fun handlePublicAPIMatrixServerReq(debugMode: Boolean, engine: Engine) : HttpHandler = { req ->
 
     val frozenMatrixServerList = engine.matrixServers.toList()
 
@@ -175,7 +188,7 @@ fun handleAPIServerReq(debugMode: Boolean, engine: Engine) : HttpHandler = { req
     }
 
     val serverReq = try {
-        jsonSerializer.decodeFromString(APIServerReq.serializer(), req.bodyString())
+        jsonSerializer.decodeFromString(PublicAPIMatrixServerReq.serializer(), req.bodyString())
     } catch (e: SerializationException) {
         null
     }
@@ -194,10 +207,10 @@ fun handleAPIServerReq(debugMode: Boolean, engine: Engine) : HttpHandler = { req
 
         if (foundServer != null)
         {
-            val apiServerReqResponse = APIServerReqResponse(foundServer.id.toString(), MatrixServer(foundServer.name, foundServer.apiUrl, foundServer.roomUpdateFreq.toLong()))
+            val apiServerReqResponse = PublicAPIMatrixServerReqResponse(foundServer.id.toString(), PublicAPIMatrixServer(foundServer.name, foundServer.apiUrl, foundServer.roomUpdateFreq.toLong()))
 
             val responseBodyStr = try {
-                jsonSerializer.encodeToString(APIServerReqResponse.serializer(), apiServerReqResponse)
+                jsonSerializer.encodeToString(PublicAPIMatrixServerReqResponse.serializer(), apiServerReqResponse)
             } catch (e: SerializationException) {
                 null
             }
