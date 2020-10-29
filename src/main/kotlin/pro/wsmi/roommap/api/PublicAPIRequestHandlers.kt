@@ -41,22 +41,25 @@ fun handlePublicAPIMatrixRoomListReq(debugMode: Boolean, engine: Engine) : HttpH
         val apiRoomList = mutableListOf<PublicAPIMatrixRoom>()
         frozenMatrixServerList.forEach { server ->
             apiRoomList.addAll(
-                server.rooms.map { room ->
-                    PublicAPIMatrixRoom (
-                        roomId = room.id,
-                        serverId = server.id.toString(),
-                        aliases = room.aliases, room.canonicalAlias,
-                        name = room.name,
-                        numJoinedMembers = room.numJoinedMembers.toInt(),
-                        topic = room.topic,
-                        worldReadable = room.worldReadable,
-                        guestCanJoin = room.guestCanJoin,
-                        avatarUrl = room.avatarUrl,
-                        languages = room.languages,
-                        tagIds = room.tags?.map { tag ->
-                            tag.id
-                        }?.toSet()
-                    )
+                server.rooms.mapNotNull { room ->
+                    if (room.excluded)
+                        null
+                    else
+                        PublicAPIMatrixRoom (
+                            roomId = room.id,
+                            serverId = server.id.toString(),
+                            aliases = room.aliases, room.canonicalAlias,
+                            name = room.name,
+                            numJoinedMembers = room.numJoinedMembers.toInt(),
+                            topic = room.topic,
+                            worldReadable = room.worldReadable,
+                            guestCanJoin = room.guestCanJoin,
+                            avatarUrl = room.avatarUrl,
+                            languages = room.languages,
+                            tagIds = room.tags?.mapNotNull { tag ->
+                                if (tag.unavailable) null else tag.id
+                            }?.toSet()
+                        )
                 }
             )
         }
@@ -130,6 +133,7 @@ fun handlePublicAPIMatrixRoomListReq(debugMode: Boolean, engine: Engine) : HttpH
             val responseBodyStr = try {
                 jsonSerializer.encodeToString(PublicAPIMatrixRoomListReqResponse.serializer(), roomListReqResponse)
             } catch (e: SerializationException) {
+                //TODO Add error logger
                 null
             }
 
@@ -168,6 +172,7 @@ fun handlePublicAPIMatrixServerListReq(debugMode: Boolean, engine: Engine) : Htt
     val responseBodyStr = try {
         jsonSerializer.encodeToString(PublicAPIMatrixServerListReqResponse.serializer(), apiServerListReqResponse)
     } catch (e : SerializationException) {
+        //TODO Add error logger
         null
     }
 
@@ -212,6 +217,7 @@ fun handlePublicAPIMatrixServerReq(debugMode: Boolean, engine: Engine) : HttpHan
             val responseBodyStr = try {
                 jsonSerializer.encodeToString(PublicAPIMatrixServerReqResponse.serializer(), apiServerReqResponse)
             } catch (e: SerializationException) {
+                //TODO Add error logger
                 null
             }
 
@@ -225,4 +231,33 @@ fun handlePublicAPIMatrixServerReq(debugMode: Boolean, engine: Engine) : HttpHan
     }
     else
         Response(Status.NOT_FOUND)
+}
+
+@ExperimentalSerializationApi
+@ExperimentalUnsignedTypes
+fun handlePublicAPIMatrixRoomTagListReq(debugMode: Boolean, engine: Engine) : HttpHandler = {
+
+    val frozenMatrixRoomTagList = engine.matrixRoomTags.toMap()
+
+    val jsonSerializer = Json {
+        prettyPrint = debugMode
+    }
+
+    val tagList = frozenMatrixRoomTagList.mapValues {
+        PublicAPIMatrixRoomTag(parentId = it.value.parent?.id)
+    }
+
+    val apiRoomTagListReqResponse = PublicAPIMatrixRoomTagListReqResponse(tagList)
+
+    val responseBodyStr = try {
+        jsonSerializer.encodeToString(PublicAPIMatrixRoomTagListReqResponse.serializer(), apiRoomTagListReqResponse)
+    } catch (e : SerializationException) {
+        //TODO Add error logger
+        null
+    }
+
+    if (responseBodyStr != null)
+        Response(Status.OK).body(responseBodyStr)
+    else
+        Response(Status.INTERNAL_SERVER_ERROR)
 }

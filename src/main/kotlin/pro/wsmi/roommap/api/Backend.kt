@@ -28,6 +28,7 @@ import org.http4k.server.Jetty
 import org.http4k.server.asServer
 import pro.wsmi.roommap.api.engine.Engine
 import pro.wsmi.roommap.lib.api.PublicAPIMatrixRoomListReq
+import pro.wsmi.roommap.lib.api.PublicAPIMatrixRoomTagListReq
 import pro.wsmi.roommap.lib.api.PublicAPIMatrixServerListReq
 import pro.wsmi.roommap.lib.api.PublicAPIMatrixServerReq
 import java.io.File
@@ -115,7 +116,8 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
         configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
             PublicAPIMatrixRoomListReq.REQ_PATH bind Method.POST to handlePublicAPIMatrixRoomListReq(debugModeCLA, engine),
             PublicAPIMatrixServerListReq.REQ_PATH bind Method.GET to handlePublicAPIMatrixServerListReq(debugModeCLA, engine),
-            PublicAPIMatrixServerReq.REQ_PATH bind Method.POST to handlePublicAPIMatrixServerReq(debugModeCLA, engine)
+            PublicAPIMatrixServerReq.REQ_PATH bind Method.POST to handlePublicAPIMatrixServerReq(debugModeCLA, engine),
+            PublicAPIMatrixRoomTagListReq.REQ_PATH bind Method.GET to handlePublicAPIMatrixRoomTagListReq(debugModeCLA, engine)
         )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }
