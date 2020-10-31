@@ -22,10 +22,8 @@ import org.http4k.core.*
 import org.http4k.core.ContentType
 import org.http4k.filter.DebuggingFilters
 import org.http4k.filter.ServerFilters
-import org.http4k.routing.bind
 import org.http4k.routing.routes
 import org.http4k.server.Jetty
-import org.http4k.server.asServer
 import pro.wsmi.roommap.api.engine.Engine
 import pro.wsmi.roommap.lib.api.PublicAPIMatrixRoomListReq
 import pro.wsmi.roommap.lib.api.PublicAPIMatrixRoomTagListReq
@@ -114,10 +112,10 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
         engine.startMatrixServerRoomListUpdateLoops()
 
         configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
-            PublicAPIMatrixRoomListReq.REQ_PATH bind Method.POST to handlePublicAPIMatrixRoomListReq(debugModeCLA, engine),
-            PublicAPIMatrixServerListReq.REQ_PATH bind Method.GET to handlePublicAPIMatrixServerListReq(debugModeCLA, engine),
-            PublicAPIMatrixServerReq.REQ_PATH bind Method.POST to handlePublicAPIMatrixServerReq(debugModeCLA, engine),
-            PublicAPIMatrixRoomTagListReq.REQ_PATH bind Method.GET to handlePublicAPIMatrixRoomTagListReq(debugModeCLA, engine)
+            PublicAPIMatrixRoomListReq.REQ_PATH bind Method.POST to handleHttpAPIMatrixRoomPublicDataListReq(debugModeCLA, engine),
+            PublicAPIMatrixServerListReq.REQ_PATH bind Method.GET to handleHttpAPIMatrixServerPublicDataListReq(debugModeCLA, engine),
+            PublicAPIMatrixServerReq.REQ_PATH bind Method.POST to handleHttpAPIMatrixServerPublicDataReq(debugModeCLA, engine),
+            PublicAPIMatrixRoomTagListReq.REQ_PATH bind Method.GET to handleHttpAPIMatrixRoomTagPublicDataListReq(debugModeCLA, engine)
         )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }
