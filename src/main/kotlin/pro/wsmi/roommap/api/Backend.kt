@@ -22,13 +22,15 @@ import org.http4k.core.*
 import org.http4k.core.ContentType
 import org.http4k.filter.DebuggingFilters
 import org.http4k.filter.ServerFilters
+import org.http4k.routing.bind
 import org.http4k.routing.routes
 import org.http4k.server.Jetty
+import org.http4k.server.asServer
 import pro.wsmi.roommap.api.engine.Engine
-import pro.wsmi.roommap.lib.api.PublicAPIMatrixRoomListReq
-import pro.wsmi.roommap.lib.api.PublicAPIMatrixRoomTagListReq
-import pro.wsmi.roommap.lib.api.PublicAPIMatrixServerListReq
-import pro.wsmi.roommap.lib.api.PublicAPIMatrixServerReq
+import pro.wsmi.roommap.lib.api.http.MatrixRoomPublicDataListReq
+import pro.wsmi.roommap.lib.api.http.MatrixRoomTagPublicDataListReq
+import pro.wsmi.roommap.lib.api.http.MatrixServerPublicDataListReq
+import pro.wsmi.roommap.lib.api.http.MatrixServerPublicDataReq
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -112,10 +114,10 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
         engine.startMatrixServerRoomListUpdateLoops()
 
         configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
-            PublicAPIMatrixRoomListReq.REQ_PATH bind Method.POST to handleHttpAPIMatrixRoomPublicDataListReq(debugModeCLA, engine),
-            PublicAPIMatrixServerListReq.REQ_PATH bind Method.GET to handleHttpAPIMatrixServerPublicDataListReq(debugModeCLA, engine),
-            PublicAPIMatrixServerReq.REQ_PATH bind Method.POST to handleHttpAPIMatrixServerPublicDataReq(debugModeCLA, engine),
-            PublicAPIMatrixRoomTagListReq.REQ_PATH bind Method.GET to handleHttpAPIMatrixRoomTagPublicDataListReq(debugModeCLA, engine)
+            MatrixRoomPublicDataListReq.REQ_PATH bind Method.POST to handleHttpAPIMatrixRoomPublicDataListReq(debugModeCLA, engine),
+            MatrixServerPublicDataListReq.REQ_PATH bind Method.GET to handleHttpAPIMatrixServerPublicDataListReq(debugModeCLA, engine),
+            MatrixServerPublicDataReq.REQ_PATH bind Method.POST to handleHttpAPIMatrixServerPublicDataReq(debugModeCLA, engine),
+            MatrixRoomTagPublicDataListReq.REQ_PATH bind Method.GET to handleHttpAPIMatrixRoomTagPublicDataListReq(debugModeCLA, engine)
         )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }
