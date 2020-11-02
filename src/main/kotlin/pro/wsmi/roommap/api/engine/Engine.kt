@@ -22,6 +22,8 @@ import pro.wsmi.roommap.api.config.BackendConfiguration
 import pro.wsmi.roommap.api.db.*
 import java.sql.SQLException
 
+@ExperimentalSerializationApi
+typealias MatrixServerListChangeHandler = (newList: List<MatrixServer>) -> Unit
 
 @ExperimentalUnsignedTypes
 @ExperimentalSerializationApi
@@ -35,10 +37,12 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
     var matrixServers: List<MatrixServer> = matrixServers
         private set
     private var matrixServerRoomUpdateJobs = this.matrixServers.associateWith { server ->
-        newMatrixServerRoomUpdateJob(matrixServer = server)
+        createMatrixServerRoomUpdateJob(matrixServer = server)
     }
+    private val matrixServerListChangeListenersMutex = Mutex()
+    private var matrixServerListChangeListeners: Set<MatrixServerListChangeHandler> = setOf()
 
-    private fun newMatrixServerRoomUpdateJob(matrixServer: MatrixServer) : Job = GlobalScope.launch(start = CoroutineStart.LAZY) {
+    private fun createMatrixServerRoomUpdateJob(matrixServer: MatrixServer) : Job = GlobalScope.launch(start = CoroutineStart.LAZY) {
 
         println("Appel d'une coroutine de mise à jour des salons du serveur ${matrixServer.name}")
 
@@ -51,7 +55,7 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
 
         if (newServer != null)
         {
-            val newJob = if (!newServer.disabled) newMatrixServerRoomUpdateJob(matrixServer = newServer) else null
+            val newJob = if (!newServer.disabled) createMatrixServerRoomUpdateJob(matrixServer = newServer) else null
             this@Engine.matrixServersMutex.withLock {
 
                 this@Engine.matrixServers = this@Engine.matrixServers.toMutableList().let { newServerList ->
@@ -71,6 +75,14 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
                         newJobList.toMap()
                     }
                 }
+
+                launch {
+                    val newList = this@Engine.matrixServers
+                    val listeners = this@Engine.matrixServerListChangeListeners
+                    listeners.forEach { handler ->
+                        handler(newList)
+                    }
+                }
             }
 
             delay(newServer.roomUpdateFreq.toLong())
@@ -84,6 +96,28 @@ class Engine private constructor(private val backendCfg: BackendConfiguration, p
     {
         this.matrixServerRoomUpdateJobs.forEach { (_, job) ->
             job.start()
+        }
+    }
+
+    suspend fun addMatrixServerListChangeListener(listener: MatrixServerListChangeHandler)
+    {
+        this.matrixServerListChangeListenersMutex.withLock {
+
+            this.matrixServerListChangeListeners = this.matrixServerListChangeListeners.toMutableSet().let {
+                it.add(listener)
+                it.toSet()
+            }
+        }
+    }
+
+    suspend fun removeMatrixServerListChangeListener(listener: MatrixServerListChangeHandler)
+    {
+        this.matrixServerListChangeListenersMutex.withLock {
+
+            this.matrixServerListChangeListeners = this.matrixServerListChangeListeners.toMutableSet().let {
+                it.remove(listener)
+                it.toSet()
+            }
         }
     }
 

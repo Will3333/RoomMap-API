@@ -16,6 +16,8 @@ import org.http4k.core.Request
 import org.http4k.core.Uri
 import pro.wsmi.kwsmilib.net.URL
 import pro.wsmi.roommap.api.config.BackendConfiguration
+import pro.wsmi.roommap.api.engine.MatrixServer
+import pro.wsmi.roommap.lib.api.MatrixRoomPublicData
 
 @ExperimentalSerializationApi
 fun getBaseRequest(backendCfg: BackendConfiguration, url: URL) : Request = Request (
@@ -31,3 +33,31 @@ fun getBaseRequest(backendCfg: BackendConfiguration, url: URL) : Request = Reque
         fragment = ""
     )
 ).replaceHeader("User-Agent", "$APP_NAME/$APP_VERSION (${backendCfg.instanceName})")
+
+@ExperimentalSerializationApi
+fun Collection<MatrixServer>.toMatrixRoomPublicDataList() : List<MatrixRoomPublicData>
+{
+    val roomList = mutableListOf<MatrixRoomPublicData>()
+    this.forEach { server ->
+        roomList.addAll(server.rooms.map { room ->
+            MatrixRoomPublicData (
+                roomId = room.id,
+                serverId = server.id.toInt(),
+                aliases = room.aliases,
+                canonicalAlias = room.canonicalAlias,
+                name = room.name,
+                numJoinedMembers = room.numJoinedMembers.toInt(),
+                topic = room.topic,
+                worldReadable = room.worldReadable,
+                guestCanJoin = room.guestCanJoin,
+                avatarUrl = room.avatarUrl,
+                languages = room.languages,
+                tagIds = room.tags?.map { tag ->
+                    tag.id
+                }?.toSet()
+            )
+        })
+    }
+
+    return roomList
+}

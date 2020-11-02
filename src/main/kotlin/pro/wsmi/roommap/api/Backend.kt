@@ -24,8 +24,10 @@ import org.http4k.filter.DebuggingFilters
 import org.http4k.filter.ServerFilters
 import org.http4k.routing.bind
 import org.http4k.routing.routes
+import org.http4k.routing.websockets
 import org.http4k.server.Jetty
 import org.http4k.server.asServer
+import org.http4k.websocket.PolyHandler
 import pro.wsmi.roommap.api.engine.Engine
 import pro.wsmi.roommap.lib.api.http.MatrixRoomPublicDataListReq
 import pro.wsmi.roommap.lib.api.http.MatrixRoomTagPublicDataListReq
@@ -113,12 +115,15 @@ class BaseLineCmd : CliktCommand(name = "RoomMap-API")
 
         engine.startMatrixServerRoomListUpdateLoops()
 
-        configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
+        val httpAPIHandler = configureAPIGlobalHttpFilter(debugModeCLA, backendCfg).then(routes(
             MatrixRoomPublicDataListReq.REQ_PATH bind Method.POST to handleHttpAPIMatrixRoomPublicDataListReq(debugModeCLA, engine),
             MatrixServerPublicDataListReq.REQ_PATH bind Method.GET to handleHttpAPIMatrixServerPublicDataListReq(debugModeCLA, engine),
             MatrixServerPublicDataReq.REQ_PATH bind Method.POST to handleHttpAPIMatrixServerPublicDataReq(debugModeCLA, engine),
             MatrixRoomTagPublicDataListReq.REQ_PATH bind Method.GET to handleHttpAPIMatrixRoomTagPublicDataListReq(debugModeCLA, engine)
-        )).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
+        ))
+        val websocketAPIHandler = websockets(pro.wsmi.roommap.lib.api.websocket.Request.API_PATH bind handleWebsocketAPIConnection(debugModeCLA, engine))
+
+        PolyHandler(http = httpAPIHandler, ws = websocketAPIHandler).asServer(Jetty(backendCfg.apiHttpServer.port)).start()
     }
 }
 
